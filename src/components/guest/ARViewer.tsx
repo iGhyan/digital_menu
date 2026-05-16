@@ -170,12 +170,12 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     );
 
     let animId: number = 0;
-const tick = () => {
-  animId = requestAnimationFrame(tick);
-  controls.update();
-  renderer.render(scene, camera);
-};
-tick();
+    const tick = () => {
+      animId = requestAnimationFrame(tick);
+      controls.update();
+      renderer.render(scene, camera);
+    };
+    tick();
 
     const onResize = () => {
       const w2 = canvas.clientWidth  || window.innerWidth;
@@ -223,9 +223,11 @@ tick();
       arScene.add(reticle);
 
       log('Requesting XR session...');
+
+      // ── KEY FIX: hit-test is optional, not required ──────────────────────
       const sessionInit: any = {
-        requiredFeatures: ['hit-test'],
-        optionalFeatures: ['dom-overlay'],
+        requiredFeatures: [],
+        optionalFeatures: ['hit-test', 'dom-overlay', 'anchors'],
       };
       if (overlayRef.current) {
         sessionInit.domOverlay = { root: overlayRef.current };
@@ -240,8 +242,16 @@ tick();
       await arRenderer.xr.setSession(session);
 
       const refSpace  = await session.requestReferenceSpace('local');
-      const viewerSpc = await session.requestReferenceSpace('viewer');
-      const hitSrc    = await (session as any).requestHitTestSource({ space: viewerSpc });
+
+      // ── Hit-test source — optional, don't fail if unsupported ────────────
+      let hitSrc: any = null;
+      try {
+        const viewerSpc = await session.requestReferenceSpace('viewer');
+        hitSrc = await (session as any).requestHitTestSource({ space: viewerSpc });
+        log('Hit-test source ready ✓');
+      } catch {
+        log('Hit-test not available — tap to place at fixed position');
+      }
 
       Object.assign(xrRef.current, {
         session,
@@ -277,42 +287,63 @@ tick();
       setPlaced(false);
       setHint('Point camera at a flat surface');
 
-      // XR render loop
+      // ── XR render loop ───────────────────────────────────────────────────
       arRenderer.setAnimationLoop((_time: number, frame: any) => {
         if (!frame) return;
         const xr = xrRef.current;
+
+        // Hit-test surface detection (only if supported)
         if (!xr.placed && xr.hitSrc) {
-          const hits = frame.getHitTestResults(xr.hitSrc);
-          if (hits.length > 0) {
-            const pose = hits[0].getPose(xr.refSpace);
-            if (pose) {
-              reticle.visible = true;
-              reticle.matrix.fromArray(pose.transform.matrix);
+          try {
+            const hits = frame.getHitTestResults(xr.hitSrc);
+            if (hits.length > 0) {
+              const pose = hits[0].getPose(xr.refSpace);
+              if (pose) {
+                reticle.visible = true;
+                reticle.matrix.fromArray(pose.transform.matrix);
+              }
+            } else {
+              reticle.visible = false;
             }
-          } else {
+          } catch {
             reticle.visible = false;
           }
         }
+
+        // No hit-test available — show reticle at fixed position in front
+        if (!xr.hitSrc && !xr.placed) {
+          reticle.visible = true;
+          reticle.matrixAutoUpdate = true;
+          reticle.position.set(0, -0.3, -0.8);
+        }
+
         arRenderer.render(arScene, arCamera);
       });
 
-      // Tap to place model
+      // ── Tap to place model ───────────────────────────────────────────────
       session.addEventListener('select', () => {
         const xr = xrRef.current;
-        if (!xr.placed && reticle.visible && xr.model) {
+        if (xr.placed || !xr.model) return;
+
+        if (reticle.visible && xr.hitSrc) {
+          // Place at hit-test position
           const pos = new THREE.Vector3();
           const rot = new THREE.Quaternion();
           const scl = new THREE.Vector3();
           reticle.matrix.decompose(pos, rot, scl);
           xr.model.position.copy(pos);
           xr.model.quaternion.copy(rot);
-          xr.model.visible = true;
-          reticle.visible  = false;
-          xr.placed        = true;
-          setPlaced(true);
-          setHint('Tap & drag to rotate · Pinch to scale');
-          log('Model placed! ✓');
+        } else {
+          // No hit-test — place 0.8m in front of camera
+          xr.model.position.set(0, -0.3, -0.8);
         }
+
+        xr.model.visible = true;
+        reticle.visible  = false;
+        xr.placed        = true;
+        setPlaced(true);
+        setHint('Tap & drag to rotate · Pinch to scale');
+        log('Model placed! ✓');
       });
 
       session.addEventListener('end', () => {
@@ -381,7 +412,10 @@ tick();
         </div>
 
         {/* Debug lines */}
-        <div className="absolute left-4 right-4" style={{ top: 90, pointerEvents: 'none' }}>
+        <div
+          className="absolute left-4 right-4"
+          style={{ top: 90, pointerEvents: 'none' }}
+        >
           {debugLog.slice(-3).map((l, i) => (
             <p key={i} className="text-[10px] text-white/50 font-mono">{l}</p>
           ))}
