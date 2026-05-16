@@ -52,15 +52,16 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
 
   const threeRef = useRef<any>(null);
   const xrRef    = useRef<any>({
-    session:  null,
-    hitSrc:   null,
-    renderer: null,
-    scene:    null,
-    camera:   null,
-    reticle:  null,
-    model:    null,
-    placed:   false,
-    refSpace: null,
+    session:       null,
+    hitSrc:        null,
+    renderer:      null,
+    scene:         null,
+    camera:        null,
+    reticle:       null,
+    model:         null,
+    placed:        false,
+    refSpace:      null,
+    cameraCleanup: null,
   });
 
   // ── Step 1: Detect device ─────────────────────────────────────────────────
@@ -75,7 +76,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
 
     if (mobile) {
       checkWebXR().then(ok => {
-        log(`WebXR: ${ok}`);
+        log(`WebXR immersive-ar: ${ok}`);
         setArSupport(ok);
       });
     }
@@ -86,18 +87,21 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         threeRef.current.renderer?.dispose();
         threeRef.current = null;
       }
+      if (xrRef.current.cameraCleanup) {
+        xrRef.current.cameraCleanup();
+      }
       xrRef.current.session?.end().catch(() => {});
     };
   }, [glbUrl]);
 
-  // ── Step 2: Start Three.js once canvas is mounted ────────────────────────
+  // ── Step 2: Start Three.js once canvas is mounted ─────────────────────────
   useEffect(() => {
     if (status !== 'loading-model') return;
     if (!canvasRef.current) return;
     loadModel();
   }, [status, isMobile]);
 
-  // ── Three.js 360° viewer ─────────────────────────────────────────────────
+  // ── Three.js 360° viewer ──────────────────────────────────────────────────
   function loadModel() {
     const canvas = canvasRef.current!;
     log('Starting Three.js...');
@@ -162,9 +166,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
       },
       (err: any) => {
         log(`GLB error: ${err?.message}`);
-        setErrorMsg(
-          'Failed to load 3D model. Presigned URL may have expired — refresh the page.',
-        );
+        setErrorMsg('Failed to load 3D model. Presigned URL may have expired — refresh.');
         setStatus('error');
       },
     );
@@ -192,195 +194,379 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     };
   }
 
-  // ── WebXR AR session ──────────────────────────────────────────────────────
+  // ── Main AR entry — tries WebXR first, falls back to camera ───────────────
   async function startAR() {
-  log('Starting Camera AR (no WebXR needed)...');
-  try {
-    // ── Step 1: Get camera stream ─────────────────────────────────────
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: 'environment', // back camera
-        width:  { ideal: window.innerWidth },
-        height: { ideal: window.innerHeight },
-      },
-      audio: false,
-    });
-    log('Camera stream ready ✓');
+    log('Starting AR...');
 
-    // ── Step 2: Create video element as background ────────────────────
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    video.autoplay  = true;
-    video.playsInline = true;
-    video.muted     = true;
-    video.style.cssText =
-      'position:fixed;top:0;left:0;width:100%;height:100%;' +
-      'object-fit:cover;z-index:9990;';
-    document.body.appendChild(video);
-    await video.play();
-    log('Video playing ✓');
+    const xrAvailable = 'xr' in navigator;
+    let webxrWorks    = false;
 
-    // ── Step 3: Three.js canvas overlay ──────────────────────────────
-    const arRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    arRenderer.setPixelRatio(window.devicePixelRatio);
-    arRenderer.setSize(window.innerWidth, window.innerHeight);
-    arRenderer.setClearColor(0x000000, 0); // transparent background
-    arRenderer.domElement.style.cssText =
-      'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9991;';
-    document.body.appendChild(arRenderer.domElement);
+    if (xrAvailable) {
+      try {
+        webxrWorks = await (navigator as any).xr.isSessionSupported('immersive-ar');
+        log(`WebXR immersive-ar supported: ${webxrWorks}`);
+      } catch {
+        webxrWorks = false;
+      }
+    }
 
-    const arScene  = new THREE.Scene();
-    const arCamera = new THREE.PerspectiveCamera(
-      70, window.innerWidth / window.innerHeight, 0.01, 20,
-    );
+    if (webxrWorks) {
+      await startWebXRAR();
+    } else {
+      log('WebXR not supported — using camera AR fallback');
+      await startCameraAR();
+    }
+  }
 
-    arScene.add(new THREE.AmbientLight(0xffffff, 1.5));
-    const arDir = new THREE.DirectionalLight(0xffeedd, 2);
-    arDir.position.set(1, 3, 1);
-    arScene.add(arDir);
+  // ── WebXR immersive-ar ────────────────────────────────────────────────────
+  async function startWebXRAR() {
+    log('Starting WebXR AR...');
+    try {
+      const arRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      arRenderer.setPixelRatio(window.devicePixelRatio);
+      arRenderer.xr.enabled = true;
+      arRenderer.outputColorSpace = THREE.SRGBColorSpace;
+      arRenderer.domElement.style.cssText =
+        'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9997;';
+      document.body.appendChild(arRenderer.domElement);
 
-    // ── Step 4: Load GLB model ────────────────────────────────────────
-    const loader = new GLTFLoader();
-    let model: any = null;
+      const arScene  = new THREE.Scene();
+      const arCamera = new THREE.PerspectiveCamera(
+        70, window.innerWidth / window.innerHeight, 0.01, 20,
+      );
 
-    loader.load(
-      glbUrl,
-      (gltf: any) => {
-        model = gltf.scene;
-        const box   = new THREE.Box3().setFromObject(model);
-        const size  = box.getSize(new THREE.Vector3());
-        const scale = 0.4 / Math.max(size.x, size.y, size.z);
-        model.scale.setScalar(scale);
-        const center = box.getCenter(new THREE.Vector3());
-        model.position.sub(center.multiplyScalar(scale));
-        // Place model in center of view
-        model.position.set(0, -0.3, -1.2);
-        arScene.add(model);
-        xrRef.current.model = model;
-        log('AR model placed ✓');
+      arScene.add(new THREE.AmbientLight(0xffffff, 1.5));
+      const arDir = new THREE.DirectionalLight(0xffeedd, 2);
+      arDir.position.set(1, 3, 1);
+      arScene.add(arDir);
+
+      // Gold reticle ring
+      const geo     = new THREE.RingGeometry(0.08, 0.11, 32).rotateX(-Math.PI / 2);
+      const mat     = new THREE.MeshBasicMaterial({ color: 0xd4a34e, side: THREE.DoubleSide });
+      const reticle = new THREE.Mesh(geo, mat);
+      reticle.matrixAutoUpdate = false;
+      reticle.visible = false;
+      arScene.add(reticle);
+
+      log('Requesting XR session...');
+      const sessionInit: any = {
+        requiredFeatures: [],
+        optionalFeatures: ['hit-test', 'dom-overlay', 'anchors'],
+      };
+      if (overlayRef.current) {
+        sessionInit.domOverlay = { root: overlayRef.current };
+      }
+
+      const session: XRSession = await (navigator as any).xr.requestSession(
+        'immersive-ar', sessionInit,
+      );
+      log('XR session granted ✓');
+
+      arRenderer.xr.setReferenceSpaceType('local');
+      await arRenderer.xr.setSession(session);
+
+      const refSpace = await session.requestReferenceSpace('local');
+
+      // Hit-test — optional
+      let hitSrc: any = null;
+      try {
+        const viewerSpc = await session.requestReferenceSpace('viewer');
+        hitSrc = await (session as any).requestHitTestSource({ space: viewerSpc });
+        log('Hit-test source ready ✓');
+      } catch {
+        log('Hit-test not available — tap places at fixed position');
+      }
+
+      Object.assign(xrRef.current, {
+        session, hitSrc,
+        renderer: arRenderer,
+        scene:    arScene,
+        camera:   arCamera,
+        reticle,  refSpace,
+        placed:   false,
+      });
+
+      // Load GLB for AR
+      const loader = new GLTFLoader();
+      loader.load(
+        glbUrl,
+        (gltf: any) => {
+          const model = gltf.scene;
+          const box   = new THREE.Box3().setFromObject(model);
+          const size  = box.getSize(new THREE.Vector3());
+          const scale = 0.25 / Math.max(size.x, size.y, size.z);
+          model.scale.setScalar(scale);
+          model.visible = false;
+          arScene.add(model);
+          xrRef.current.model = model;
+          log('AR model ready — point at surface');
+        },
+        undefined,
+        (err: any) => log(`AR GLB err: ${err?.message}`),
+      );
+
+      setStatus('ar-active');
+      setPlaced(false);
+      setHint('Point camera at a flat surface');
+
+      // XR render loop
+      arRenderer.setAnimationLoop((_time: number, frame: any) => {
+        if (!frame) return;
+        const xr = xrRef.current;
+
+        if (!xr.placed && xr.hitSrc) {
+          try {
+            const hits = frame.getHitTestResults(xr.hitSrc);
+            if (hits.length > 0) {
+              const pose = hits[0].getPose(xr.refSpace);
+              if (pose) {
+                reticle.visible = true;
+                reticle.matrix.fromArray(pose.transform.matrix);
+              }
+            } else {
+              reticle.visible = false;
+            }
+          } catch {
+            reticle.visible = false;
+          }
+        }
+
+        // No hit-test — show reticle at fixed position
+        if (!xr.hitSrc && !xr.placed) {
+          reticle.visible = true;
+          reticle.matrixAutoUpdate = true;
+          reticle.position.set(0, -0.3, -0.8);
+        }
+
+        arRenderer.render(arScene, arCamera);
+      });
+
+      // Tap to place
+      session.addEventListener('select', () => {
+        const xr = xrRef.current;
+        if (xr.placed || !xr.model) return;
+
+        if (reticle.visible && xr.hitSrc) {
+          const pos = new THREE.Vector3();
+          const rot = new THREE.Quaternion();
+          const scl = new THREE.Vector3();
+          reticle.matrix.decompose(pos, rot, scl);
+          xr.model.position.copy(pos);
+          xr.model.quaternion.copy(rot);
+        } else {
+          xr.model.position.set(0, -0.3, -0.8);
+        }
+
+        xr.model.visible = true;
+        reticle.visible  = false;
+        xr.placed        = true;
         setPlaced(true);
-        setHint('Drag to rotate · Pinch to scale');
-      },
-      undefined,
-      (err: any) => log(`GLB err: ${err?.message}`),
-    );
+        setHint('Tap & drag to rotate · Pinch to scale');
+        log('Model placed! ✓');
+      });
 
-    // ── Step 5: Touch controls for rotation + scale ───────────────────
-    let lastTouchX   = 0;
-    let lastTouchY   = 0;
-    let lastPinchDist = 0;
-    let modelScale   = 1.0;
+      session.addEventListener('end', () => {
+        log('XR session ended');
+        arRenderer.setAnimationLoop(null);
+        arRenderer.domElement.remove();
+        arRenderer.dispose();
+        setStatus('model-ready');
+        setPlaced(false);
+      });
 
-    const onTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 1) {
-        lastTouchX = e.touches[0].clientX;
-        lastTouchY = e.touches[0].clientY;
-      }
-      if (e.touches.length === 2) {
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        lastPinchDist = Math.sqrt(dx * dx + dy * dy);
-      }
-    };
+    } catch (err: any) {
+      log(`WebXR error: ${err?.message ?? String(err)}`);
+      log('Falling back to camera AR...');
+      await startCameraAR();
+    }
+  }
 
-    const onTouchMove = (e: TouchEvent) => {
-      e.preventDefault();
-      const m = xrRef.current.model;
-      if (!m) return;
+  // ── Camera-based AR fallback ──────────────────────────────────────────────
+  async function startCameraAR() {
+    log('Starting Camera AR fallback...');
+    try {
+      // Get back camera
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          facingMode: 'environment',
+          width:      { ideal: window.innerWidth },
+          height:     { ideal: window.innerHeight },
+        },
+        audio: false,
+      });
+      log('Camera stream ready ✓');
 
-      if (e.touches.length === 1) {
-        // Single finger — rotate model
-        const dx = (e.touches[0].clientX - lastTouchX) * 0.01;
-        const dy = (e.touches[0].clientY - lastTouchY) * 0.01;
-        m.rotation.y += dx;
-        m.rotation.x += dy;
-        lastTouchX = e.touches[0].clientX;
-        lastTouchY = e.touches[0].clientY;
-      }
+      // Video background
+      const video = document.createElement('video');
+      video.srcObject   = stream;
+      video.autoplay    = true;
+      video.playsInline = true;
+      video.muted       = true;
+      video.style.cssText =
+        'position:fixed;top:0;left:0;width:100%;height:100%;' +
+        'object-fit:cover;z-index:9990;';
+      document.body.appendChild(video);
+      await video.play();
+      log('Video playing ✓');
 
-      if (e.touches.length === 2) {
-        // Two fingers — pinch to scale
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        const delta = dist / lastPinchDist;
-        modelScale = Math.max(0.2, Math.min(3.0, modelScale * delta));
-        const base = 0.4 / Math.max(1, 1); // base scale factor
-        m.scale.setScalar(base * modelScale);
-        lastPinchDist = dist;
-      }
-    };
+      // Three.js transparent overlay
+      const arRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      arRenderer.setPixelRatio(window.devicePixelRatio);
+      arRenderer.setSize(window.innerWidth, window.innerHeight);
+      arRenderer.setClearColor(0x000000, 0);
+      arRenderer.domElement.style.cssText =
+        'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9991;';
+      document.body.appendChild(arRenderer.domElement);
 
-    arRenderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
-    arRenderer.domElement.addEventListener('touchmove',  onTouchMove,  { passive: false });
+      const arScene  = new THREE.Scene();
+      const arCamera = new THREE.PerspectiveCamera(
+        70, window.innerWidth / window.innerHeight, 0.01, 20,
+      );
 
-    // ── Step 6: Render loop ───────────────────────────────────────────
-    let animId = 0;
-    const tick = () => {
-      animId = requestAnimationFrame(tick);
-      // Gentle auto-rotation when not touching
-      if (xrRef.current.model && !xrRef.current.touching) {
-        xrRef.current.model.rotation.y += 0.005;
-      }
-      arRenderer.render(arScene, arCamera);
-    };
-    tick();
+      arScene.add(new THREE.AmbientLight(0xffffff, 1.5));
+      const arDir = new THREE.DirectionalLight(0xffeedd, 2);
+      arDir.position.set(1, 3, 1);
+      arScene.add(arDir);
+      const arFill = new THREE.DirectionalLight(0xaaccff, 0.5);
+      arFill.position.set(-2, 1, -1);
+      arScene.add(arFill);
 
-    // ── Step 7: Store cleanup ─────────────────────────────────────────
-    Object.assign(xrRef.current, {
-      session:  null, // no XR session
-      renderer: arRenderer,
-      scene:    arScene,
-      camera:   arCamera,
-      placed:   true,
-      // Custom cleanup
-      cameraCleanup: () => {
+      // Load GLB
+      const loader = new GLTFLoader();
+      loader.load(
+        glbUrl,
+        (gltf: any) => {
+          const model = gltf.scene;
+          const box   = new THREE.Box3().setFromObject(model);
+          const size  = box.getSize(new THREE.Vector3());
+          const scale = 0.4 / Math.max(size.x, size.y, size.z);
+          model.scale.setScalar(scale);
+          const center = box.getCenter(new THREE.Vector3());
+          model.position.sub(center.multiplyScalar(scale));
+          model.position.set(0, -0.3, -1.2);
+          arScene.add(model);
+          xrRef.current.model = model;
+          log('Camera AR model placed ✓');
+          setPlaced(true);
+          setHint('Drag to rotate · Pinch to scale');
+        },
+        undefined,
+        (err: any) => log(`GLB err: ${err?.message}`),
+      );
+
+      // Touch controls — rotate + pinch-to-scale
+      let lastTouchX    = 0;
+      let lastTouchY    = 0;
+      let lastPinchDist = 0;
+      let modelScale    = 1.0;
+
+      const onTouchStart = (e: TouchEvent) => {
+        if (e.touches.length === 1) {
+          lastTouchX = e.touches[0].clientX;
+          lastTouchY = e.touches[0].clientY;
+        }
+        if (e.touches.length === 2) {
+          const dx = e.touches[0].clientX - e.touches[1].clientX;
+          const dy = e.touches[0].clientY - e.touches[1].clientY;
+          lastPinchDist = Math.sqrt(dx * dx + dy * dy);
+        }
+      };
+
+      const onTouchMove = (e: TouchEvent) => {
+        e.preventDefault();
+        const m = xrRef.current.model;
+        if (!m) return;
+
+        if (e.touches.length === 1) {
+          const dx = (e.touches[0].clientX - lastTouchX) * 0.01;
+          const dy = (e.touches[0].clientY - lastTouchY) * 0.01;
+          m.rotation.y += dx;
+          m.rotation.x += dy;
+          lastTouchX = e.touches[0].clientX;
+          lastTouchY = e.touches[0].clientY;
+        }
+
+        if (e.touches.length === 2) {
+          const dx   = e.touches[0].clientX - e.touches[1].clientX;
+          const dy   = e.touches[0].clientY - e.touches[1].clientY;
+          const dist  = Math.sqrt(dx * dx + dy * dy);
+          const delta = dist / lastPinchDist;
+          modelScale  = Math.max(0.2, Math.min(3.0, modelScale * delta));
+          m.scale.setScalar(0.4 * modelScale);
+          lastPinchDist = dist;
+        }
+      };
+
+      arRenderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
+      arRenderer.domElement.addEventListener('touchmove',  onTouchMove,  { passive: false });
+
+      // Render loop with gentle auto-rotate
+      let animId = 0;
+      const tick = () => {
+        animId = requestAnimationFrame(tick);
+        if (xrRef.current.model) {
+          xrRef.current.model.rotation.y += 0.004;
+        }
+        arRenderer.render(arScene, arCamera);
+      };
+      tick();
+
+      // Cleanup
+      const cleanup = () => {
         cancelAnimationFrame(animId);
         stream.getTracks().forEach(t => t.stop());
         video.remove();
-        arRenderer.domElement.remove();
-        arRenderer.dispose();
         arRenderer.domElement.removeEventListener('touchstart', onTouchStart);
         arRenderer.domElement.removeEventListener('touchmove',  onTouchMove);
-      },
-    });
+        arRenderer.domElement.remove();
+        arRenderer.dispose();
+      };
 
-    setStatus('ar-active');
-    setPlaced(true);
-    setHint('Drag to rotate · Pinch to scale');
-    log('Camera AR active ✓');
+      Object.assign(xrRef.current, {
+        session:       null,
+        renderer:      arRenderer,
+        scene:         arScene,
+        camera:        arCamera,
+        placed:        true,
+        cameraCleanup: cleanup,
+      });
 
-  } catch (err: any) {
-    log(`Camera AR error: ${err?.message}`);
-    if (err?.name === 'NotAllowedError') {
-      setErrorMsg('Camera permission denied. Please allow camera access and try again.');
-    } else {
-      setErrorMsg(`AR failed: ${err?.message ?? 'Unknown error'}`);
+      setStatus('ar-active');
+      setPlaced(true);
+      setHint('Drag to rotate · Pinch to scale');
+      log('Camera AR active ✓');
+
+    } catch (err: any) {
+      log(`Camera AR error: ${err?.message}`);
+      if (err?.name === 'NotAllowedError') {
+        setErrorMsg('Camera permission denied. Please allow camera access and try again.');
+      } else {
+        setErrorMsg(`AR failed: ${err?.message ?? 'Unknown error'}`);
+      }
+      setStatus('error');
     }
-    setStatus('error');
   }
-}
 
+  // ── End AR ────────────────────────────────────────────────────────────────
   function endAR() {
-  // Camera-based AR cleanup
-  if (xrRef.current.cameraCleanup) {
-    xrRef.current.cameraCleanup();
-    xrRef.current.cameraCleanup = null;
+    if (xrRef.current.cameraCleanup) {
+      xrRef.current.cameraCleanup();
+      xrRef.current.cameraCleanup = null;
+    }
+    xrRef.current.session?.end().catch(() => {});
+    setStatus('model-ready');
+    setPlaced(false);
   }
-  // WebXR cleanup
-  xrRef.current.session?.end().catch(() => {});
-  setStatus('model-ready');
-  setPlaced(false);
-}
 
- function reposition() {
-  const xr = xrRef.current;
-  if (xr.model) {
-    xr.model.position.set(0, -0.3, -1.2);
-    xr.model.rotation.set(0, 0, 0);
+  function reposition() {
+    const xr = xrRef.current;
+    if (xr.model) {
+      xr.model.position.set(0, -0.3, -1.2);
+      xr.model.rotation.set(0, 0, 0);
+    }
+    setHint('Drag to rotate · Pinch to scale');
   }
-  setHint('Drag to rotate · Pinch to scale');
-}
+
   // ── AR ACTIVE overlay ─────────────────────────────────────────────────────
   if (status === 'ar-active') {
     return (
@@ -489,7 +675,6 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
   return (
     <div className="w-full flex flex-col gap-4">
 
-      {/* Canvas */}
       <div
         className="relative w-full rounded-[24px] overflow-hidden border border-white/[0.06]"
         style={{ height: isMobile ? 360 : 480, background: '#0f0d0a' }}
@@ -564,7 +749,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
           <div className="absolute bottom-4 right-4 flex flex-col gap-2">
             {[
               {
-                icon: <RotateCcw size={15} />,
+                icon:   <RotateCcw size={15} />,
                 action: () => {
                   if (threeRef.current?.controls)
                     threeRef.current.controls.autoRotate =
@@ -572,14 +757,14 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
                 },
               },
               {
-                icon: <ZoomIn size={15} />,
+                icon:   <ZoomIn size={15} />,
                 action: () => {
                   if (threeRef.current?.camera)
                     threeRef.current.camera.position.multiplyScalar(0.85);
                 },
               },
               {
-                icon: <ZoomOut size={15} />,
+                icon:   <ZoomOut size={15} />,
                 action: () => {
                   if (threeRef.current?.camera)
                     threeRef.current.camera.position.multiplyScalar(1.15);
@@ -606,66 +791,58 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         </p>
       </div>
 
-      {/* Mobile: AR launch button */}
-     {isMobile && status === 'model-ready' && (
-      <div className="flex flex-col gap-3">
-        {true ? (
-            <>
-              <button
-                onClick={startAR}
-                className="w-full h-14 rounded-2xl flex items-center justify-center gap-3 font-medium text-[16px] active:scale-95 transition-all"
-                style={{
-                  background: 'linear-gradient(135deg,#d4a34e,#c4873c)',
-                  color: '#0f0d0a',
-                }}
-              >
-                <Smartphone size={22} />
-                Launch AR View
-              </button>
-              <p
-                className="text-center text-[11px]"
-                style={{ color: 'rgba(255,255,255,0.2)' }}
-              >
-                Places the dish on your real table using your camera
-              </p>
-            </>
-          ) : (
-            <div
-              className="w-full rounded-2xl p-4 border border-white/[0.06]"
-              style={{ background: '#111114' }}
-            >
-              <p className="text-[13px] text-white/40 mb-2 text-center">
-                WebXR AR not available
-              </p>
-              <p className="text-[11px] text-white/25 mb-3 text-center">
-                Enable in Chrome then refresh:
-              </p>
-              {[
-                'chrome://flags/#unsafely-treat-insecure-origin-as-secure',
-                'chrome://flags/#webxr-incubations',
-                'chrome://flags/#enable-webxr-ar-module',
-              ].map((flag) => (
-                <div
-                  key={flag}
-                  className="mb-2 px-3 py-2 rounded-xl border border-white/[0.07]"
-                  style={{ background: 'rgba(255,255,255,0.03)' }}
-                >
-                  <p
-                    className="text-[10px] font-mono break-all"
-                    style={{ color: '#d4a34e' }}
-                  >
-                    {flag}
-                  </p>
-                </div>
-              ))}
-            </div>
-          )}
+      {/* Mobile: AR launch button — shown to ALL mobile users */}
+      {isMobile && status === 'model-ready' && (
+        <div className="flex flex-col gap-3">
+          <button
+            onClick={startAR}
+            className="w-full h-14 rounded-2xl flex items-center justify-center gap-3 font-medium text-[16px] active:scale-95 transition-all"
+            style={{
+              background: 'linear-gradient(135deg,#d4a34e,#c4873c)',
+              color: '#0f0d0a',
+            }}
+          >
+            <Smartphone size={22} />
+            Launch AR View
+          </button>
+          <p
+            className="text-center text-[11px]"
+            style={{ color: 'rgba(255,255,255,0.2)' }}
+          >
+            {arSupport
+              ? 'WebXR AR — places dish on real surfaces'
+              : 'Camera AR — dish overlay on live camera feed'}
+          </p>
         </div>
       )}
 
+      {/* Debug panel */}
+      {debugLog.length > 0 && status === 'model-ready' && (
+        <div
+          className="rounded-xl p-3 border border-white/[0.05]"
+          style={{ background: 'rgba(0,0,0,0.4)' }}
+        >
+          <p className="text-[9px] text-white/15 uppercase tracking-widest mb-1 font-mono">
+            Debug
+          </p>
+          {debugLog.map((l, i) => (
+            <p key={i} className="text-[10px] text-white/30 font-mono leading-relaxed">
+              {l}
+            </p>
+          ))}
+          <p
+            className="text-[10px] font-mono mt-1"
+            style={{ color: arSupport ? '#81c784' : '#ffb74d' }}
+          >
+            WebXR: {arSupport ? 'SUPPORTED ✓' : 'Camera fallback mode'}
+          </p>
+          <p className="text-[10px] text-white/20 font-mono">
+            Protocol: {typeof window !== 'undefined' ? window.location.protocol : ''}
+          </p>
+        </div>
+      )}
 
-
-      {/* DOM overlay div for WebXR */}
+      {/* DOM overlay for WebXR */}
       <div
         ref={overlayRef}
         className="fixed inset-0 pointer-events-none"
