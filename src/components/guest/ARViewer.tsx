@@ -218,168 +218,239 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     }
   }
 
-  // ── WebXR immersive-ar ────────────────────────────────────────────────────
-  async function startWebXRAR() {
-    log('Starting WebXR AR...');
-    try {
-      const arRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      arRenderer.setPixelRatio(window.devicePixelRatio);
-      arRenderer.xr.enabled = true;
-      arRenderer.outputColorSpace = THREE.SRGBColorSpace;
-      arRenderer.domElement.style.cssText =
-        'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9997;';
-      document.body.appendChild(arRenderer.domElement);
+async function startWebXRAR() {
+  log('Starting WebXR AR...');
+  try {
+    const arRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    arRenderer.setPixelRatio(window.devicePixelRatio);
+    arRenderer.xr.enabled = true;
+    arRenderer.outputColorSpace = THREE.SRGBColorSpace;
+    arRenderer.domElement.style.cssText =
+      'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9997;';
+    document.body.appendChild(arRenderer.domElement);
 
-      const arScene  = new THREE.Scene();
-      const arCamera = new THREE.PerspectiveCamera(
-        70, window.innerWidth / window.innerHeight, 0.01, 20,
-      );
+    const arScene  = new THREE.Scene();
+    const arCamera = new THREE.PerspectiveCamera(
+      70, window.innerWidth / window.innerHeight, 0.01, 20,
+    );
 
-      arScene.add(new THREE.AmbientLight(0xffffff, 1.5));
-      const arDir = new THREE.DirectionalLight(0xffeedd, 2);
-      arDir.position.set(1, 3, 1);
-      arScene.add(arDir);
+    arScene.add(new THREE.AmbientLight(0xffffff, 1.5));
+    const arDir = new THREE.DirectionalLight(0xffeedd, 2);
+    arDir.position.set(1, 3, 1);
+    arScene.add(arDir);
 
-      // Gold reticle ring
-      const geo     = new THREE.RingGeometry(0.08, 0.11, 32).rotateX(-Math.PI / 2);
-      const mat     = new THREE.MeshBasicMaterial({ color: 0xd4a34e, side: THREE.DoubleSide });
-      const reticle = new THREE.Mesh(geo, mat);
-      reticle.matrixAutoUpdate = false;
+    // Gold reticle ring
+    const geo     = new THREE.RingGeometry(0.08, 0.11, 32).rotateX(-Math.PI / 2);
+    const mat     = new THREE.MeshBasicMaterial({ color: 0xd4a34e, side: THREE.DoubleSide });
+    const reticle = new THREE.Mesh(geo, mat);
+    reticle.matrixAutoUpdate = false;
+    reticle.visible = false;
+    arScene.add(reticle);
+
+    // ── Create DOM overlay directly on body ───────────────────────────────
+    const domOverlayRoot = document.createElement('div');
+    domOverlayRoot.style.cssText =
+      'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;pointer-events:none;';
+    document.body.appendChild(domOverlayRoot);
+
+    // Top bar inside overlay
+    const topBar = document.createElement('div');
+    topBar.style.cssText =
+      'position:absolute;top:0;left:0;right:0;display:flex;align-items:center;' +
+      'justify-content:space-between;padding:20px;pointer-events:auto;' +
+      'background:linear-gradient(to bottom,rgba(0,0,0,0.75),transparent);';
+
+    const liveLabel = document.createElement('div');
+    liveLabel.style.cssText =
+      'display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.6);' +
+      'border-radius:100px;padding:6px 14px;';
+    liveLabel.innerHTML =
+      '<span style="width:8px;height:8px;border-radius:50%;background:#ef4444;' +
+      'animation:pulse 1s infinite;display:inline-block;"></span>' +
+      '<span style="color:white;font-size:12px;font-weight:500;">AR Live</span>';
+
+    const titleEl = document.createElement('p');
+    titleEl.style.cssText = 'color:white;font-size:16px;font-weight:600;';
+    titleEl.textContent   = itemName;
+
+    const exitBtn = document.createElement('button');
+    exitBtn.style.cssText =
+      'background:rgba(0,0,0,0.6);border:none;border-radius:100px;' +
+      'padding:6px 16px;color:white;font-size:13px;cursor:pointer;pointer-events:auto;';
+    exitBtn.textContent = 'Exit AR';
+    exitBtn.onclick = () => {
+      xrRef.current.session?.end().catch(() => {});
+    };
+
+    topBar.appendChild(liveLabel);
+    topBar.appendChild(titleEl);
+    topBar.appendChild(exitBtn);
+    domOverlayRoot.appendChild(topBar);
+
+    // Hint bar
+    const hintBar = document.createElement('div');
+    hintBar.style.cssText =
+      'position:absolute;bottom:150px;left:0;right:0;display:flex;justify-content:center;pointer-events:none;';
+    hintBar.innerHTML =
+      '<div style="background:rgba(0,0,0,0.65);border-radius:100px;padding:10px 20px;">' +
+      '<p id="ar-hint" style="color:white;font-size:13px;text-align:center;">Point camera at a flat surface</p>' +
+      '</div>';
+    domOverlayRoot.appendChild(hintBar);
+
+    // Reposition button
+    const repoBtn = document.createElement('button');
+    repoBtn.style.cssText =
+      'position:absolute;bottom:70px;left:50%;transform:translateX(-50%);' +
+      'background:rgba(0,0,0,0.65);border:none;border-radius:100px;' +
+      'padding:10px 20px;color:white;font-size:13px;cursor:pointer;' +
+      'pointer-events:auto;display:none;';
+    repoBtn.textContent = '↺ Reposition';
+    repoBtn.onclick = () => {
+      const xr = xrRef.current;
+      if (xr.model) xr.model.visible = false;
+      xr.placed = false;
       reticle.visible = false;
-      arScene.add(reticle);
+      reticle.matrixAutoUpdate = false;
+      repoBtn.style.display = 'none';
+      const hint = document.getElementById('ar-hint');
+      if (hint) hint.textContent = 'Point camera at a flat surface';
+    };
+    domOverlayRoot.appendChild(repoBtn);
 
-      log('Requesting XR session...');
-      const sessionInit: any = {
-        requiredFeatures: [],
-        optionalFeatures: ['hit-test', 'dom-overlay', 'anchors'],
-      };
-      if (overlayRef.current) {
-        sessionInit.domOverlay = { root: overlayRef.current };
-      }
+    log('Requesting XR session...');
+    const sessionInit: any = {
+      requiredFeatures: [],
+      optionalFeatures: ['hit-test', 'dom-overlay', 'anchors'],
+      domOverlay: { root: domOverlayRoot },
+    };
 
-      const session: XRSession = await (navigator as any).xr.requestSession(
-        'immersive-ar', sessionInit,
-      );
-      log('XR session granted ✓');
+    const session: XRSession = await (navigator as any).xr.requestSession(
+      'immersive-ar', sessionInit,
+    );
+    log('XR session granted ✓');
 
-      arRenderer.xr.setReferenceSpaceType('local');
-      await arRenderer.xr.setSession(session);
+    arRenderer.xr.setReferenceSpaceType('local');
+    await arRenderer.xr.setSession(session);
 
-      const refSpace = await session.requestReferenceSpace('local');
+    const refSpace = await session.requestReferenceSpace('local');
 
-      // Hit-test — optional
-      let hitSrc: any = null;
-      try {
-        const viewerSpc = await session.requestReferenceSpace('viewer');
-        hitSrc = await (session as any).requestHitTestSource({ space: viewerSpc });
-        log('Hit-test source ready ✓');
-      } catch {
-        log('Hit-test not available — tap places at fixed position');
-      }
+    // Hit-test — optional
+    let hitSrc: any = null;
+    try {
+      const viewerSpc = await session.requestReferenceSpace('viewer');
+      hitSrc = await (session as any).requestHitTestSource({ space: viewerSpc });
+      log('Hit-test source ready ✓');
+    } catch {
+      log('Hit-test not available — tap to place at fixed position');
+    }
 
-      Object.assign(xrRef.current, {
-        session, hitSrc,
-        renderer: arRenderer,
-        scene:    arScene,
-        camera:   arCamera,
-        reticle,  refSpace,
-        placed:   false,
-      });
+    Object.assign(xrRef.current, {
+      session, hitSrc,
+      renderer: arRenderer,
+      scene:    arScene,
+      camera:   arCamera,
+      reticle,  refSpace,
+      placed:   false,
+    });
 
-      // Load GLB for AR
-      const loader = new GLTFLoader();
-      loader.load(
-        glbUrl,
-        (gltf: any) => {
-          const model = gltf.scene;
-          const box   = new THREE.Box3().setFromObject(model);
-          const size  = box.getSize(new THREE.Vector3());
-          const scale = 0.25 / Math.max(size.x, size.y, size.z);
-          model.scale.setScalar(scale);
-          model.visible = false;
-          arScene.add(model);
-          xrRef.current.model = model;
-          log('AR model ready — point at surface');
-        },
-        undefined,
-        (err: any) => log(`AR GLB err: ${err?.message}`),
-      );
+    // Load GLB for AR
+    const loader = new GLTFLoader();
+    loader.load(
+      glbUrl,
+      (gltf: any) => {
+        const model = gltf.scene;
+        const box   = new THREE.Box3().setFromObject(model);
+        const size  = box.getSize(new THREE.Vector3());
+        const scale = 0.25 / Math.max(size.x, size.y, size.z);
+        model.scale.setScalar(scale);
+        model.visible = false;
+        arScene.add(model);
+        xrRef.current.model = model;
+        log('AR model ready — point at surface');
+      },
+      undefined,
+      (err: any) => log(`AR GLB err: ${err?.message}`),
+    );
 
-      setStatus('ar-active');
-      setPlaced(false);
-      setHint('Point camera at a flat surface');
+    setStatus('ar-active');
+    setPlaced(false);
 
-      // XR render loop
-      arRenderer.setAnimationLoop((_time: number, frame: any) => {
-        if (!frame) return;
-        const xr = xrRef.current;
+    // XR render loop
+    arRenderer.setAnimationLoop((_time: number, frame: any) => {
+      if (!frame) return;
+      const xr = xrRef.current;
 
-        if (!xr.placed && xr.hitSrc) {
-          try {
-            const hits = frame.getHitTestResults(xr.hitSrc);
-            if (hits.length > 0) {
-              const pose = hits[0].getPose(xr.refSpace);
-              if (pose) {
-                reticle.visible = true;
-                reticle.matrix.fromArray(pose.transform.matrix);
-              }
-            } else {
-              reticle.visible = false;
+      if (!xr.placed && xr.hitSrc) {
+        try {
+          const hits = frame.getHitTestResults(xr.hitSrc);
+          if (hits.length > 0) {
+            const pose = hits[0].getPose(xr.refSpace);
+            if (pose) {
+              reticle.visible = true;
+              reticle.matrix.fromArray(pose.transform.matrix);
             }
-          } catch {
+          } else {
             reticle.visible = false;
           }
+        } catch {
+          reticle.visible = false;
         }
+      }
 
-        // No hit-test — show reticle at fixed position
-        if (!xr.hitSrc && !xr.placed) {
-          reticle.visible = true;
-          reticle.matrixAutoUpdate = true;
-          reticle.position.set(0, -0.3, -0.8);
-        }
+      // No hit-test — fixed position reticle
+      if (!xr.hitSrc && !xr.placed) {
+        reticle.visible          = true;
+        reticle.matrixAutoUpdate = true;
+        reticle.position.set(0, -0.3, -0.8);
+      }
 
-        arRenderer.render(arScene, arCamera);
-      });
+      arRenderer.render(arScene, arCamera);
+    });
 
-      // Tap to place
-      session.addEventListener('select', () => {
-        const xr = xrRef.current;
-        if (xr.placed || !xr.model) return;
+    // Tap to place
+    session.addEventListener('select', () => {
+      const xr = xrRef.current;
+      if (xr.placed || !xr.model) return;
 
-        if (reticle.visible && xr.hitSrc) {
-          const pos = new THREE.Vector3();
-          const rot = new THREE.Quaternion();
-          const scl = new THREE.Vector3();
-          reticle.matrix.decompose(pos, rot, scl);
-          xr.model.position.copy(pos);
-          xr.model.quaternion.copy(rot);
-        } else {
-          xr.model.position.set(0, -0.3, -0.8);
-        }
+      if (reticle.visible && xr.hitSrc) {
+        const pos = new THREE.Vector3();
+        const rot = new THREE.Quaternion();
+        const scl = new THREE.Vector3();
+        reticle.matrix.decompose(pos, rot, scl);
+        xr.model.position.copy(pos);
+        xr.model.quaternion.copy(rot);
+      } else {
+        xr.model.position.set(0, -0.3, -0.8);
+      }
 
-        xr.model.visible = true;
-        reticle.visible  = false;
-        xr.placed        = true;
-        setPlaced(true);
-        setHint('Tap & drag to rotate · Pinch to scale');
-        log('Model placed! ✓');
-      });
+      xr.model.visible = true;
+      reticle.visible  = false;
+      xr.placed        = true;
+      setPlaced(true);
+      repoBtn.style.display = 'block';
+      const hint = document.getElementById('ar-hint');
+      if (hint) hint.textContent = 'Tap & drag to rotate · Pinch to scale';
+      log('Model placed! ✓');
+    });
 
-      session.addEventListener('end', () => {
-        log('XR session ended');
-        arRenderer.setAnimationLoop(null);
-        arRenderer.domElement.remove();
-        arRenderer.dispose();
-        setStatus('model-ready');
-        setPlaced(false);
-      });
+    session.addEventListener('end', () => {
+      log('XR session ended');
+      arRenderer.setAnimationLoop(null);
+      arRenderer.domElement.remove();
+      arRenderer.dispose();
+      domOverlayRoot.remove();
+      setStatus('model-ready');
+      setPlaced(false);
+    });
 
-    } catch (err: any) {
-      log(`WebXR error: ${err?.message ?? String(err)}`);
-      log('Falling back to camera AR...');
-      await startCameraAR();
-    }
+  } catch (err: any) {
+    log(`WebXR error: ${err?.message ?? String(err)}`);
+    log('Falling back to camera AR...');
+    await startCameraAR();
   }
+}
+
+
 
   // ── Camera-based AR fallback ──────────────────────────────────────────────
   async function startCameraAR() {
