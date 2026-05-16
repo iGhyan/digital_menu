@@ -4,8 +4,7 @@ import { useState, useCallback } from 'react';
 import dynamic from 'next/dynamic';
 import { Smartphone, Monitor, Loader2, AlertCircle } from 'lucide-react';
 import { useDeviceCapabilities } from '@/hooks/useDeviceCapabilities';
-import { fetchArModel, DEFAULT_RESTAURANT_ID, AR_ITEM_MAP } from '@/lib/ar-api';
-
+import { fetchArModel, DEMO_RESTAURANT_ID, DEMO_ITEM_ID } from '@/lib/ar-api';
 // Dynamic imports — Three.js is heavy, keep out of SSR bundle
 const DesktopModelViewer = dynamic(
   () => import('@/components/guest/DesktopModelViewer'),
@@ -47,8 +46,7 @@ export default function ArEntry({ itemId, itemName, itemEmoji }: ArButtonProps) 
     setFetchError('');
 
     try {
-      const modelId = AR_ITEM_MAP[itemId] ?? AR_ITEM_MAP['wagyu-tenderloin'];
-      const data = await fetchArModel(DEFAULT_RESTAURANT_ID, modelId);
+      const data = await fetchArModel(DEMO_RESTAURANT_ID, DEMO_ITEM_ID);
       setGlbUrl(data.presignedUrl);
       setFetchState('ready');
       setShowViewer(true);
