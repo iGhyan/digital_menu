@@ -63,14 +63,12 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     cameraCleanup: null,
   });
 
-  // ── Step 1: Detect device ─────────────────────────────────────────────────
   useEffect(() => {
     const mobile = isMobileDevice();
     setIsMobile(mobile);
     log(`Device: ${mobile ? 'MOBILE' : 'DESKTOP'}`);
     log(`Screen: ${window.innerWidth}x${window.innerHeight}`);
     log(`Touch: ${navigator.maxTouchPoints}`);
-
     setStatus('loading-model');
 
     if (mobile) {
@@ -86,21 +84,17 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         threeRef.current.renderer?.dispose();
         threeRef.current = null;
       }
-      if (xrRef.current.cameraCleanup) {
-        xrRef.current.cameraCleanup();
-      }
+      if (xrRef.current.cameraCleanup) xrRef.current.cameraCleanup();
       xrRef.current.session?.end().catch(() => {});
     };
   }, [glbUrl]);
 
-  // ── Step 2: Start Three.js once canvas is mounted ─────────────────────────
   useEffect(() => {
     if (status !== 'loading-model') return;
     if (!canvasRef.current) return;
     loadModel();
   }, [status, isMobile]);
 
-  // ── Three.js 360° viewer ──────────────────────────────────────────────────
   function loadModel() {
     const canvas = canvasRef.current!;
     log('Starting Three.js...');
@@ -158,10 +152,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         log('GLB loaded OK ✓');
       },
       (xhr: any) => {
-        if (xhr.total) {
-          const pct = Math.round((xhr.loaded / xhr.total) * 100);
-          setLoadPct(pct);
-        }
+        if (xhr.total) setLoadPct(Math.round((xhr.loaded / xhr.total) * 100));
       },
       (err: any) => {
         log(`GLB error: ${err?.message}`);
@@ -193,22 +184,15 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     };
   }
 
-  // ── Main AR entry — tries WebXR first, falls back to camera ───────────────
   async function startAR() {
     log('Starting AR...');
-
-    const xrAvailable = 'xr' in navigator;
-    let webxrWorks    = false;
-
-    if (xrAvailable) {
+    let webxrWorks = false;
+    if ('xr' in navigator) {
       try {
         webxrWorks = await (navigator as any).xr.isSessionSupported('immersive-ar');
         log(`WebXR immersive-ar supported: ${webxrWorks}`);
-      } catch {
-        webxrWorks = false;
-      }
+      } catch { webxrWorks = false; }
     }
-
     if (webxrWorks) {
       await startWebXRAR();
     } else {
@@ -217,7 +201,6 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     }
   }
 
-  // ── WebXR immersive-ar ────────────────────────────────────────────────────
   async function startWebXRAR() {
     log('Starting WebXR AR...');
     try {
@@ -233,13 +216,12 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
       const arCamera = new THREE.PerspectiveCamera(
         70, window.innerWidth / window.innerHeight, 0.01, 20,
       );
-
       arScene.add(new THREE.AmbientLight(0xffffff, 1.5));
       const arDir = new THREE.DirectionalLight(0xffeedd, 2);
       arDir.position.set(1, 3, 1);
       arScene.add(arDir);
 
-      // Gold reticle ring
+      // Gold reticle
       const geo     = new THREE.RingGeometry(0.08, 0.11, 32).rotateX(-Math.PI / 2);
       const mat     = new THREE.MeshBasicMaterial({ color: 0xd4a34e, side: THREE.DoubleSide });
       const reticle = new THREE.Mesh(geo, mat);
@@ -247,27 +229,31 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
       reticle.visible = false;
       arScene.add(reticle);
 
-      // ── DOM overlay directly on body ──────────────────────────────────────
+      // ── DOM overlay on body ───────────────────────────────────────────────
       const domOverlayRoot = document.createElement('div');
       domOverlayRoot.style.cssText =
-        'position:fixed;top:0;left:0;width:100%;height:100%;' +
-        'z-index:9999;pointer-events:none;';
+        'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9999;pointer-events:none;';
       document.body.appendChild(domOverlayRoot);
+
+      // Touch interceptor — full screen, pointer-events:auto so it captures touches
+      const touchLayer = document.createElement('div');
+      touchLayer.style.cssText =
+        'position:absolute;inset:0;pointer-events:auto;touch-action:none;';
+      domOverlayRoot.appendChild(touchLayer);
 
       // Top bar
       const topBar = document.createElement('div');
       topBar.style.cssText =
         'position:absolute;top:0;left:0;right:0;display:flex;align-items:center;' +
         'justify-content:space-between;padding:20px;pointer-events:auto;' +
-        'background:linear-gradient(to bottom,rgba(0,0,0,0.75),transparent);';
+        'background:linear-gradient(to bottom,rgba(0,0,0,0.75),transparent);z-index:1;';
 
       const liveLabel = document.createElement('div');
       liveLabel.style.cssText =
         'display:flex;align-items:center;gap:8px;background:rgba(0,0,0,0.6);' +
         'border-radius:100px;padding:6px 14px;';
       liveLabel.innerHTML =
-        '<span style="width:8px;height:8px;border-radius:50%;background:#ef4444;' +
-        'display:inline-block;"></span>' +
+        '<span style="width:8px;height:8px;border-radius:50%;background:#ef4444;display:inline-block;"></span>' +
         '<span style="color:white;font-size:12px;font-weight:500;">AR Live</span>';
 
       const titleEl = document.createElement('p');
@@ -279,58 +265,63 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         'background:rgba(0,0,0,0.6);border:none;border-radius:100px;' +
         'padding:6px 16px;color:white;font-size:13px;cursor:pointer;pointer-events:auto;';
       exitBtn.textContent = 'Exit AR';
-      exitBtn.onclick = () => {
-        xrRef.current.session?.end().catch(() => {});
-      };
+      exitBtn.onclick = () => xrRef.current.session?.end().catch(() => {});
 
       topBar.appendChild(liveLabel);
       topBar.appendChild(titleEl);
       topBar.appendChild(exitBtn);
       domOverlayRoot.appendChild(topBar);
 
-      // Hint bar
-      const hintBar = document.createElement('div');
-      hintBar.style.cssText =
-        'position:absolute;bottom:150px;left:0;right:0;' +
-        'display:flex;justify-content:center;pointer-events:none;';
-      hintBar.innerHTML =
+      // Hint
+      const hintEl = document.createElement('div');
+      hintEl.style.cssText =
+        'position:absolute;bottom:150px;left:0;right:0;display:flex;justify-content:center;' +
+        'pointer-events:none;z-index:1;';
+      hintEl.innerHTML =
         '<div style="background:rgba(0,0,0,0.65);border-radius:100px;padding:10px 20px;">' +
         '<p id="ar-hint" style="color:white;font-size:13px;text-align:center;">' +
         'Point camera at a flat surface</p></div>';
-      domOverlayRoot.appendChild(hintBar);
+      domOverlayRoot.appendChild(hintEl);
 
       // Controls hint
       const ctrlHint = document.createElement('div');
+      ctrlHint.id = 'ctrl-hint';
       ctrlHint.style.cssText =
-        'position:absolute;bottom:200px;left:0;right:0;' +
-        'display:none;justify-content:center;pointer-events:none;';
+        'position:absolute;bottom:210px;left:0;right:0;display:none;' +
+        'justify-content:center;pointer-events:none;z-index:1;';
       ctrlHint.innerHTML =
         '<div style="background:rgba(212,163,78,0.15);border:1px solid rgba(212,163,78,0.3);' +
         'border-radius:100px;padding:6px 16px;">' +
-        '<p style="color:#d4a34e;font-size:11px;text-align:center;">' +
-        '1 finger: rotate · 2 fingers: pinch to scale</p></div>';
+        '<p style="color:#d4a34e;font-size:11px;">1 finger: rotate · 2 fingers: pinch to scale</p></div>';
       domOverlayRoot.appendChild(ctrlHint);
+
+      // Scale indicator
+      const scaleEl = document.createElement('div');
+      scaleEl.id = 'scale-el';
+      scaleEl.style.cssText =
+        'position:absolute;bottom:260px;left:0;right:0;display:none;' +
+        'justify-content:center;pointer-events:none;z-index:1;';
+      scaleEl.innerHTML =
+        '<div style="background:rgba(0,0,0,0.5);border-radius:100px;padding:4px 12px;">' +
+        '<p id="scale-txt" style="color:rgba(255,255,255,0.6);font-size:11px;font-family:monospace;">1.0×</p></div>';
+      domOverlayRoot.appendChild(scaleEl);
 
       // Reposition button
       const repoBtn = document.createElement('button');
       repoBtn.style.cssText =
         'position:absolute;bottom:70px;left:50%;transform:translateX(-50%);' +
         'background:rgba(0,0,0,0.65);border:1px solid rgba(255,255,255,0.2);' +
-        'border-radius:100px;padding:10px 20px;color:white;font-size:13px;' +
-        'cursor:pointer;pointer-events:auto;display:none;';
+        'border-radius:100px;padding:10px 24px;color:white;font-size:13px;' +
+        'cursor:pointer;pointer-events:auto;display:none;z-index:1;';
       repoBtn.textContent = '↺ Reposition';
       domOverlayRoot.appendChild(repoBtn);
 
       log('Requesting XR session...');
-      const sessionInit: any = {
+      const session: XRSession = await (navigator as any).xr.requestSession('immersive-ar', {
         requiredFeatures: [],
         optionalFeatures: ['hit-test', 'dom-overlay', 'anchors'],
         domOverlay: { root: domOverlayRoot },
-      };
-
-      const session: XRSession = await (navigator as any).xr.requestSession(
-        'immersive-ar', sessionInit,
-      );
+      });
       log('XR session granted ✓');
 
       arRenderer.xr.setReferenceSpaceType('local');
@@ -338,7 +329,6 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
 
       const refSpace = await session.requestReferenceSpace('local');
 
-      // Hit-test — optional
       let hitSrc: any = null;
       try {
         const viewerSpc = await session.requestReferenceSpace('viewer');
@@ -349,15 +339,12 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
       }
 
       Object.assign(xrRef.current, {
-        session, hitSrc,
-        renderer: arRenderer,
-        scene:    arScene,
-        camera:   arCamera,
-        reticle,  refSpace,
-        placed:   false,
+        session, hitSrc, renderer: arRenderer,
+        scene: arScene, camera: arCamera,
+        reticle, refSpace, placed: false,
       });
 
-      // Load GLB for AR
+      // Load GLB
       const loader = new GLTFLoader();
       loader.load(
         glbUrl,
@@ -401,7 +388,6 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
           }
         }
 
-        // No hit-test — fixed reticle
         if (!xr.hitSrc && !xr.placed) {
           reticle.visible          = true;
           reticle.matrixAutoUpdate = true;
@@ -427,24 +413,29 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
           xr.model.position.set(0, -0.3, -0.8);
         }
 
-        xr.model.visible      = true;
-        reticle.visible       = false;
-        xr.placed             = true;
+        xr.model.visible       = true;
+        reticle.visible        = false;
+        xr.placed              = true;
         setPlaced(true);
         repoBtn.style.display  = 'block';
         ctrlHint.style.display = 'flex';
+        scaleEl.style.display  = 'flex';
         const hint = document.getElementById('ar-hint');
         if (hint) hint.textContent = 'Drag to rotate · Pinch to scale';
         log('Model placed! ✓');
       });
 
-      // ── Touch controls — rotate + pinch scale ─────────────────────────────
+      // ── Touch controls on touchLayer (not canvas) ─────────────────────────
       let lastTouchX    = 0;
       let lastTouchY    = 0;
       let lastPinchDist = 0;
       let modelScale    = 1.0;
 
       const onTouchStart = (e: TouchEvent) => {
+        // Don't intercept button taps
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'BUTTON') return;
+
         if (e.touches.length === 1) {
           lastTouchX = e.touches[0].clientX;
           lastTouchY = e.touches[0].clientY;
@@ -462,31 +453,39 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         if (!xr.model || !xr.placed) return;
 
         if (e.touches.length === 1) {
-          // Single finger — rotate
+          // Rotate
           const dx = (e.touches[0].clientX - lastTouchX) * 0.012;
           const dy = (e.touches[0].clientY - lastTouchY) * 0.012;
           xr.model.rotation.y += dx;
           xr.model.rotation.x  = Math.max(
-            -Math.PI / 4,
-            Math.min(Math.PI / 4, xr.model.rotation.x + dy),
+            -Math.PI / 3,
+            Math.min(Math.PI / 3, xr.model.rotation.x + dy),
           );
           lastTouchX = e.touches[0].clientX;
           lastTouchY = e.touches[0].clientY;
         }
 
         if (e.touches.length === 2) {
-          // Two fingers — pinch to scale
+          // Pinch scale
           const dx    = e.touches[0].clientX - e.touches[1].clientX;
           const dy    = e.touches[0].clientY - e.touches[1].clientY;
           const dist  = Math.sqrt(dx * dx + dy * dy);
           const delta = dist / lastPinchDist;
-          modelScale  = Math.max(0.2, Math.min(4.0, modelScale * delta));
+          modelScale  = Math.max(0.15, Math.min(5.0, modelScale * delta));
           xr.model.scale.setScalar(0.25 * modelScale);
           lastPinchDist = dist;
+
+          // Update scale indicator
+          const scaleTxt = document.getElementById('scale-txt');
+          if (scaleTxt) scaleTxt.textContent = `${modelScale.toFixed(1)}×`;
         }
       };
 
-      // Reposition button handler
+      // Attach to touchLayer — sits on top of XR canvas, captures all touches
+      touchLayer.addEventListener('touchstart', onTouchStart, { passive: true  });
+      touchLayer.addEventListener('touchmove',  onTouchMove,  { passive: false });
+
+      // Reposition
       repoBtn.onclick = () => {
         const xr = xrRef.current;
         if (xr.model) {
@@ -500,19 +499,18 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         reticle.matrixAutoUpdate = false;
         repoBtn.style.display  = 'none';
         ctrlHint.style.display = 'none';
+        scaleEl.style.display  = 'none';
         setPlaced(false);
         const hint = document.getElementById('ar-hint');
         if (hint) hint.textContent = 'Point camera at a flat surface';
+        const scaleTxt = document.getElementById('scale-txt');
+        if (scaleTxt) scaleTxt.textContent = '1.0×';
       };
 
-      arRenderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
-      arRenderer.domElement.addEventListener('touchmove',  onTouchMove,  { passive: false });
-
-      // Session end
       session.addEventListener('end', () => {
         log('XR session ended');
-        arRenderer.domElement.removeEventListener('touchstart', onTouchStart);
-        arRenderer.domElement.removeEventListener('touchmove',  onTouchMove);
+        touchLayer.removeEventListener('touchstart', onTouchStart);
+        touchLayer.removeEventListener('touchmove',  onTouchMove);
         arRenderer.setAnimationLoop(null);
         arRenderer.domElement.remove();
         arRenderer.dispose();
@@ -528,28 +526,19 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     }
   }
 
-  // ── Camera-based AR fallback ──────────────────────────────────────────────
   async function startCameraAR() {
     log('Starting Camera AR fallback...');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment',
-          width:      { ideal: window.innerWidth },
-          height:     { ideal: window.innerHeight },
-        },
+        video: { facingMode: 'environment', width: { ideal: window.innerWidth }, height: { ideal: window.innerHeight } },
         audio: false,
       });
       log('Camera stream ready ✓');
 
       const video = document.createElement('video');
-      video.srcObject   = stream;
-      video.autoplay    = true;
-      video.playsInline = true;
-      video.muted       = true;
-      video.style.cssText =
-        'position:fixed;top:0;left:0;width:100%;height:100%;' +
-        'object-fit:cover;z-index:9990;';
+      video.srcObject = stream; video.autoplay = true;
+      video.playsInline = true; video.muted = true;
+      video.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;object-fit:cover;z-index:9990;';
       document.body.appendChild(video);
       await video.play();
       log('Video playing ✓');
@@ -559,21 +548,16 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
       arRenderer.setSize(window.innerWidth, window.innerHeight);
       arRenderer.setClearColor(0x000000, 0);
       arRenderer.domElement.style.cssText =
-        'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9991;';
+        'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9991;touch-action:none;';
       document.body.appendChild(arRenderer.domElement);
 
       const arScene  = new THREE.Scene();
-      const arCamera = new THREE.PerspectiveCamera(
-        70, window.innerWidth / window.innerHeight, 0.01, 20,
-      );
-
+      const arCamera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
       arScene.add(new THREE.AmbientLight(0xffffff, 1.5));
       const arDir = new THREE.DirectionalLight(0xffeedd, 2);
-      arDir.position.set(1, 3, 1);
-      arScene.add(arDir);
+      arDir.position.set(1, 3, 1); arScene.add(arDir);
       const arFill = new THREE.DirectionalLight(0xaaccff, 0.5);
-      arFill.position.set(-2, 1, -1);
-      arScene.add(arFill);
+      arFill.position.set(-2, 1, -1); arScene.add(arFill);
 
       const loader = new GLTFLoader();
       loader.load(
@@ -596,7 +580,6 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         (err: any) => log(`GLB err: ${err?.message}`),
       );
 
-      // Touch controls
       let lastTouchX    = 0;
       let lastTouchY    = 0;
       let lastPinchDist = 0;
@@ -623,10 +606,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
           const dx = (e.touches[0].clientX - lastTouchX) * 0.012;
           const dy = (e.touches[0].clientY - lastTouchY) * 0.012;
           m.rotation.y += dx;
-          m.rotation.x  = Math.max(
-            -Math.PI / 4,
-            Math.min(Math.PI / 4, m.rotation.x + dy),
-          );
+          m.rotation.x  = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, m.rotation.x + dy));
           lastTouchX = e.touches[0].clientX;
           lastTouchY = e.touches[0].clientY;
         }
@@ -636,13 +616,13 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
           const dy    = e.touches[0].clientY - e.touches[1].clientY;
           const dist  = Math.sqrt(dx * dx + dy * dy);
           const delta = dist / lastPinchDist;
-          modelScale  = Math.max(0.2, Math.min(4.0, modelScale * delta));
+          modelScale  = Math.max(0.15, Math.min(5.0, modelScale * delta));
           m.scale.setScalar(0.4 * modelScale);
           lastPinchDist = dist;
         }
       };
 
-      arRenderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
+      arRenderer.domElement.addEventListener('touchstart', onTouchStart, { passive: true  });
       arRenderer.domElement.addEventListener('touchmove',  onTouchMove,  { passive: false });
 
       let animId = 0;
@@ -663,12 +643,9 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
       };
 
       Object.assign(xrRef.current, {
-        session:       null,
-        renderer:      arRenderer,
-        scene:         arScene,
-        camera:        arCamera,
-        placed:        true,
-        cameraCleanup: cleanup,
+        session: null, renderer: arRenderer,
+        scene: arScene, camera: arCamera,
+        placed: true, cameraCleanup: cleanup,
       });
 
       setStatus('ar-active');
@@ -676,16 +653,15 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
 
     } catch (err: any) {
       log(`Camera AR error: ${err?.message}`);
-      if (err?.name === 'NotAllowedError') {
-        setErrorMsg('Camera permission denied. Please allow camera access and try again.');
-      } else {
-        setErrorMsg(`AR failed: ${err?.message ?? 'Unknown error'}`);
-      }
+      setErrorMsg(
+        err?.name === 'NotAllowedError'
+          ? 'Camera permission denied. Please allow camera access and try again.'
+          : `AR failed: ${err?.message ?? 'Unknown error'}`,
+      );
       setStatus('error');
     }
   }
 
-  // ── End AR ────────────────────────────────────────────────────────────────
   function endAR() {
     if (xrRef.current.cameraCleanup) {
       xrRef.current.cameraCleanup();
@@ -705,7 +681,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     }
   }
 
-  // ── AR ACTIVE overlay (camera fallback UI) ────────────────────────────────
+  // ── AR ACTIVE (camera fallback overlay) ───────────────────────────────────
   if (status === 'ar-active') {
     return (
       <div
@@ -713,26 +689,15 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         className="fixed inset-0"
         style={{ zIndex: 9999, pointerEvents: 'none' }}
       >
-        {/* Top bar */}
         <div
           className="absolute top-0 left-0 right-0 flex items-center justify-between px-5 py-5"
-          style={{
-            pointerEvents: 'auto',
-            background: 'linear-gradient(to bottom,rgba(0,0,0,0.75),transparent)',
-          }}
+          style={{ pointerEvents: 'auto', background: 'linear-gradient(to bottom,rgba(0,0,0,0.75),transparent)' }}
         >
-          <div
-            className="flex items-center gap-2 rounded-full px-3 py-1.5"
-            style={{ background: 'rgba(0,0,0,0.6)' }}
-          >
+          <div className="flex items-center gap-2 rounded-full px-3 py-1.5" style={{ background: 'rgba(0,0,0,0.6)' }}>
             <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
             <span className="text-white text-[12px] font-medium">AR Live</span>
           </div>
-
-          <p className="font-serif text-white text-[16px] font-semibold drop-shadow">
-            {itemName}
-          </p>
-
+          <p className="font-serif text-white text-[16px] font-semibold drop-shadow">{itemName}</p>
           <button
             onClick={endAR}
             className="rounded-full px-4 py-1.5 text-white text-[13px] font-medium"
@@ -742,38 +707,21 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
           </button>
         </div>
 
-        {/* Controls hint */}
-        <div
-          className="absolute left-0 right-0 flex justify-center"
-          style={{ bottom: 200, pointerEvents: 'none' }}
-        >
-          <div
-            className="rounded-full px-4 py-1.5"
-            style={{ background: 'rgba(212,163,78,0.15)', border: '1px solid rgba(212,163,78,0.3)' }}
-          >
+        <div className="absolute left-0 right-0 flex justify-center" style={{ bottom: 210, pointerEvents: 'none' }}>
+          <div className="rounded-full px-4 py-1.5" style={{ background: 'rgba(212,163,78,0.15)', border: '1px solid rgba(212,163,78,0.3)' }}>
             <p className="text-[11px] text-center" style={{ color: '#d4a34e' }}>
               1 finger: rotate · 2 fingers: pinch to scale
             </p>
           </div>
         </div>
 
-        {/* Hint */}
-        <div
-          className="absolute left-0 right-0 flex justify-center"
-          style={{ bottom: 150, pointerEvents: 'none' }}
-        >
+        <div className="absolute left-0 right-0 flex justify-center" style={{ bottom: 150, pointerEvents: 'none' }}>
           <div className="rounded-full px-5 py-2.5" style={{ background: 'rgba(0,0,0,0.65)' }}>
-            <p className="text-white text-[13px] text-center">
-              Drag to rotate · Pinch to scale
-            </p>
+            <p className="text-white text-[13px] text-center">Drag to rotate · Pinch to scale</p>
           </div>
         </div>
 
-        {/* Reposition */}
-        <div
-          className="absolute left-0 right-0 flex justify-center"
-          style={{ bottom: 70, pointerEvents: 'auto' }}
-        >
+        <div className="absolute left-0 right-0 flex justify-center" style={{ bottom: 70, pointerEvents: 'auto' }}>
           <button
             onClick={reposition}
             className="flex items-center gap-2 rounded-full px-5 py-2.5 text-white text-[13px]"
@@ -794,9 +742,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         style={{ background: '#0f0d0a', border: '0.5px solid rgba(239,83,80,0.20)' }}
       >
         <AlertCircle size={36} className="text-red-400" />
-        <p className="text-[14px] text-white/50 text-center max-w-[280px] leading-relaxed">
-          {errorMsg}
-        </p>
+        <p className="text-[14px] text-white/50 text-center max-w-[280px] leading-relaxed">{errorMsg}</p>
         {debugLog.map((l, i) => (
           <p key={i} className="text-[10px] text-white/25 font-mono text-center">{l}</p>
         ))}
@@ -811,173 +757,88 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     );
   }
 
-  // ── CANVAS — desktop 360° + mobile 3D preview ─────────────────────────────
+  // ── CANVAS ────────────────────────────────────────────────────────────────
   return (
     <div className="w-full flex flex-col gap-4">
-
       <div
         className="relative w-full rounded-[24px] overflow-hidden border border-white/[0.06]"
         style={{ height: isMobile ? 360 : 480, background: '#0f0d0a' }}
       >
-        <canvas
-          ref={canvasRef}
-          className="w-full h-full"
-          style={{ display: 'block' }}
-        />
+        <canvas ref={canvasRef} className="w-full h-full" style={{ display: 'block' }} />
 
-        {/* Loading overlay */}
         {(status === 'detecting' || status === 'loading-model' || loadPct < 100) && (
-          <div
-            className="absolute inset-0 flex flex-col items-center justify-center gap-4"
-            style={{ background: 'rgba(15,13,10,0.92)' }}
-          >
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4" style={{ background: 'rgba(15,13,10,0.92)' }}>
             <div className="text-[60px] opacity-40">{emoji}</div>
-            <div
-              className="flex items-center gap-2"
-              style={{ color: 'rgba(255,255,255,0.4)' }}
-            >
+            <div className="flex items-center gap-2" style={{ color: 'rgba(255,255,255,0.4)' }}>
               <Loader2 size={16} className="animate-spin" />
               <span className="text-[13px]">
-                {status === 'detecting'
-                  ? 'Detecting device…'
-                  : `Loading 3D model… ${loadPct}%`}
+                {status === 'detecting' ? 'Detecting device…' : `Loading 3D model… ${loadPct}%`}
               </span>
             </div>
-            <div
-              className="w-48 h-[3px] rounded-full overflow-hidden"
-              style={{ background: 'rgba(255,255,255,0.06)' }}
-            >
-              <div
-                className="h-full rounded-full transition-all duration-300"
-                style={{ width: `${loadPct}%`, background: 'rgba(212,163,78,0.6)' }}
-              />
+            <div className="w-48 h-[3px] rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+              <div className="h-full rounded-full transition-all duration-300" style={{ width: `${loadPct}%`, background: 'rgba(212,163,78,0.6)' }} />
             </div>
             <div className="mt-2 px-4">
               {debugLog.map((l, i) => (
-                <p
-                  key={i}
-                  className="text-[10px] font-mono text-center"
-                  style={{ color: 'rgba(255,255,255,0.25)' }}
-                >
-                  {l}
-                </p>
+                <p key={i} className="text-[10px] font-mono text-center" style={{ color: 'rgba(255,255,255,0.25)' }}>{l}</p>
               ))}
             </div>
           </div>
         )}
 
-        {/* Badge */}
         {status === 'model-ready' && (
-          <div
-            className="absolute top-4 left-4 flex items-center gap-2 rounded-full px-3 py-1.5"
-            style={{ background: 'rgba(0,0,0,0.55)' }}
-          >
-            {isMobile
-              ? <Smartphone size={13} style={{ color: '#d4a34e' }} />
-              : <Monitor    size={13} style={{ color: '#d4a34e' }} />}
-            <span
-              className="text-[11px] font-medium"
-              style={{ color: 'rgba(255,255,255,0.6)' }}
-            >
+          <div className="absolute top-4 left-4 flex items-center gap-2 rounded-full px-3 py-1.5" style={{ background: 'rgba(0,0,0,0.55)' }}>
+            {isMobile ? <Smartphone size={13} style={{ color: '#d4a34e' }} /> : <Monitor size={13} style={{ color: '#d4a34e' }} />}
+            <span className="text-[11px] font-medium" style={{ color: 'rgba(255,255,255,0.6)' }}>
               {isMobile ? '3D Preview' : '360° View — Drag to rotate'}
             </span>
           </div>
         )}
 
-        {/* Desktop zoom controls */}
         {status === 'model-ready' && !isMobile && (
           <div className="absolute bottom-4 right-4 flex flex-col gap-2">
             {[
-              {
-                icon:   <RotateCcw size={15} />,
-                action: () => {
-                  if (threeRef.current?.controls)
-                    threeRef.current.controls.autoRotate =
-                      !threeRef.current.controls.autoRotate;
-                },
-              },
-              {
-                icon:   <ZoomIn size={15} />,
-                action: () => {
-                  if (threeRef.current?.camera)
-                    threeRef.current.camera.position.multiplyScalar(0.85);
-                },
-              },
-              {
-                icon:   <ZoomOut size={15} />,
-                action: () => {
-                  if (threeRef.current?.camera)
-                    threeRef.current.camera.position.multiplyScalar(1.15);
-                },
-              },
+              { icon: <RotateCcw size={15} />, action: () => { if (threeRef.current?.controls) threeRef.current.controls.autoRotate = !threeRef.current.controls.autoRotate; } },
+              { icon: <ZoomIn size={15} />,    action: () => { if (threeRef.current?.camera) threeRef.current.camera.position.multiplyScalar(0.85); } },
+              { icon: <ZoomOut size={15} />,   action: () => { if (threeRef.current?.camera) threeRef.current.camera.position.multiplyScalar(1.15); } },
             ].map((btn, i) => (
-              <button
-                key={i}
-                onClick={btn.action}
-                className="w-9 h-9 rounded-xl flex items-center justify-center
-                           border border-white/10 transition-all"
-                style={{ background: 'rgba(0,0,0,0.55)', color: 'rgba(255,255,255,0.5)' }}
-              >
+              <button key={i} onClick={btn.action}
+                className="w-9 h-9 rounded-xl flex items-center justify-center border border-white/10 transition-all"
+                style={{ background: 'rgba(0,0,0,0.55)', color: 'rgba(255,255,255,0.5)' }}>
                 {btn.icon}
               </button>
             ))}
           </div>
         )}
 
-        <p
-          className="absolute bottom-4 left-4 text-[11px] pointer-events-none"
-          style={{ color: 'rgba(255,255,255,0.2)' }}
-        >
-          {isMobile
-            ? 'Drag to rotate · Pinch to zoom'
-            : 'Drag to rotate · Scroll to zoom'}
+        <p className="absolute bottom-4 left-4 text-[11px] pointer-events-none" style={{ color: 'rgba(255,255,255,0.2)' }}>
+          {isMobile ? 'Drag to rotate · Pinch to zoom' : 'Drag to rotate · Scroll to zoom'}
         </p>
       </div>
 
-      {/* Mobile: AR launch button */}
       {isMobile && status === 'model-ready' && (
         <div className="flex flex-col gap-3">
           <button
             onClick={startAR}
-            className="w-full h-14 rounded-2xl flex items-center justify-center
-                       gap-3 font-medium text-[16px] active:scale-95 transition-all"
-            style={{
-              background: 'linear-gradient(135deg,#d4a34e,#c4873c)',
-              color: '#0f0d0a',
-            }}
+            className="w-full h-14 rounded-2xl flex items-center justify-center gap-3 font-medium text-[16px] active:scale-95 transition-all"
+            style={{ background: 'linear-gradient(135deg,#d4a34e,#c4873c)', color: '#0f0d0a' }}
           >
             <Smartphone size={22} />
             Launch AR View
           </button>
-          <p
-            className="text-center text-[11px]"
-            style={{ color: 'rgba(255,255,255,0.2)' }}
-          >
-            {arSupport
-              ? 'WebXR AR — places dish on real surfaces'
-              : 'Camera AR — dish overlay on live camera feed'}
+          <p className="text-center text-[11px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
+            {arSupport ? 'WebXR AR — places dish on real surfaces' : 'Camera AR — dish overlay on live camera feed'}
           </p>
         </div>
       )}
 
-      {/* Debug panel */}
       {debugLog.length > 0 && status === 'model-ready' && (
-        <div
-          className="rounded-xl p-3 border border-white/[0.05]"
-          style={{ background: 'rgba(0,0,0,0.4)' }}
-        >
-          <p className="text-[9px] text-white/15 uppercase tracking-widest mb-1 font-mono">
-            Debug
-          </p>
+        <div className="rounded-xl p-3 border border-white/[0.05]" style={{ background: 'rgba(0,0,0,0.4)' }}>
+          <p className="text-[9px] text-white/15 uppercase tracking-widest mb-1 font-mono">Debug</p>
           {debugLog.map((l, i) => (
-            <p key={i} className="text-[10px] text-white/30 font-mono leading-relaxed">
-              {l}
-            </p>
+            <p key={i} className="text-[10px] text-white/30 font-mono leading-relaxed">{l}</p>
           ))}
-          <p
-            className="text-[10px] font-mono mt-1"
-            style={{ color: arSupport ? '#81c784' : '#ffb74d' }}
-          >
+          <p className="text-[10px] font-mono mt-1" style={{ color: arSupport ? '#81c784' : '#ffb74d' }}>
             WebXR: {arSupport ? 'SUPPORTED ✓' : 'Camera fallback mode'}
           </p>
           <p className="text-[10px] text-white/20 font-mono">
@@ -986,12 +847,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         </div>
       )}
 
-      {/* DOM overlay for WebXR */}
-      <div
-        ref={overlayRef}
-        className="fixed inset-0 pointer-events-none"
-        style={{ zIndex: 9999 }}
-      />
+      <div ref={overlayRef} className="fixed inset-0 pointer-events-none" style={{ zIndex: 9999 }} />
     </div>
   );
 }
