@@ -147,8 +147,8 @@ export default function MobileArViewer({ glbUrl, itemName, itemEmoji, onClose }:
 
       // ── Tap to place ─────────────────────────────────────────────────────────
       const tempMatrix = new THREE.Matrix4();
-      let currentHitMatrix: THREE.Matrix4 | null = null;
-
+      let currentHitMatrix: any = null;
+      
       const onSelect = () => {
         if (!model || !currentHitMatrix) return;
         model.position.setFromMatrixPosition(currentHitMatrix);
