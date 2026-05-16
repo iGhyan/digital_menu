@@ -194,186 +194,193 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
 
   // ── WebXR AR session ──────────────────────────────────────────────────────
   async function startAR() {
-    log('Starting WebXR AR...');
-    try {
-      const arRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      arRenderer.setPixelRatio(window.devicePixelRatio);
-      arRenderer.xr.enabled = true;
-      arRenderer.outputColorSpace = THREE.SRGBColorSpace;
-      arRenderer.domElement.style.cssText =
-        'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9997;';
-      document.body.appendChild(arRenderer.domElement);
+  log('Starting Camera AR (no WebXR needed)...');
+  try {
+    // ── Step 1: Get camera stream ─────────────────────────────────────
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: 'environment', // back camera
+        width:  { ideal: window.innerWidth },
+        height: { ideal: window.innerHeight },
+      },
+      audio: false,
+    });
+    log('Camera stream ready ✓');
 
-      const arScene  = new THREE.Scene();
-      const arCamera = new THREE.PerspectiveCamera(
-        70, window.innerWidth / window.innerHeight, 0.01, 20,
-      );
+    // ── Step 2: Create video element as background ────────────────────
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.autoplay  = true;
+    video.playsInline = true;
+    video.muted     = true;
+    video.style.cssText =
+      'position:fixed;top:0;left:0;width:100%;height:100%;' +
+      'object-fit:cover;z-index:9990;';
+    document.body.appendChild(video);
+    await video.play();
+    log('Video playing ✓');
 
-      arScene.add(new THREE.AmbientLight(0xffffff, 1.5));
-      const arDir = new THREE.DirectionalLight(0xffeedd, 2);
-      arDir.position.set(1, 3, 1);
-      arScene.add(arDir);
+    // ── Step 3: Three.js canvas overlay ──────────────────────────────
+    const arRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    arRenderer.setPixelRatio(window.devicePixelRatio);
+    arRenderer.setSize(window.innerWidth, window.innerHeight);
+    arRenderer.setClearColor(0x000000, 0); // transparent background
+    arRenderer.domElement.style.cssText =
+      'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9991;';
+    document.body.appendChild(arRenderer.domElement);
 
-      // Gold reticle ring for surface detection
-      const geo     = new THREE.RingGeometry(0.08, 0.11, 32).rotateX(-Math.PI / 2);
-      const mat     = new THREE.MeshBasicMaterial({ color: 0xd4a34e, side: THREE.DoubleSide });
-      const reticle = new THREE.Mesh(geo, mat);
-      reticle.matrixAutoUpdate = false;
-      reticle.visible = false;
-      arScene.add(reticle);
+    const arScene  = new THREE.Scene();
+    const arCamera = new THREE.PerspectiveCamera(
+      70, window.innerWidth / window.innerHeight, 0.01, 20,
+    );
 
-      log('Requesting XR session...');
+    arScene.add(new THREE.AmbientLight(0xffffff, 1.5));
+    const arDir = new THREE.DirectionalLight(0xffeedd, 2);
+    arDir.position.set(1, 3, 1);
+    arScene.add(arDir);
 
-      // ── KEY FIX: hit-test is optional, not required ──────────────────────
-      const sessionInit: any = {
-        requiredFeatures: [],
-        optionalFeatures: ['hit-test', 'dom-overlay', 'anchors'],
-      };
-      if (overlayRef.current) {
-        sessionInit.domOverlay = { root: overlayRef.current };
-      }
+    // ── Step 4: Load GLB model ────────────────────────────────────────
+    const loader = new GLTFLoader();
+    let model: any = null;
 
-      const session: XRSession = await (navigator as any).xr.requestSession(
-        'immersive-ar', sessionInit,
-      );
-      log('XR session granted ✓');
-
-      arRenderer.xr.setReferenceSpaceType('local');
-      await arRenderer.xr.setSession(session);
-
-      const refSpace  = await session.requestReferenceSpace('local');
-
-      // ── Hit-test source — optional, don't fail if unsupported ────────────
-      let hitSrc: any = null;
-      try {
-        const viewerSpc = await session.requestReferenceSpace('viewer');
-        hitSrc = await (session as any).requestHitTestSource({ space: viewerSpc });
-        log('Hit-test source ready ✓');
-      } catch {
-        log('Hit-test not available — tap to place at fixed position');
-      }
-
-      Object.assign(xrRef.current, {
-        session,
-        hitSrc,
-        renderer: arRenderer,
-        scene:    arScene,
-        camera:   arCamera,
-        reticle,
-        refSpace,
-        placed:   false,
-      });
-
-      // Load GLB for AR
-      const loader = new GLTFLoader();
-      loader.load(
-        glbUrl,
-        (gltf: any) => {
-          const model = gltf.scene;
-          const box   = new THREE.Box3().setFromObject(model);
-          const size  = box.getSize(new THREE.Vector3());
-          const scale = 0.25 / Math.max(size.x, size.y, size.z);
-          model.scale.setScalar(scale);
-          model.visible = false;
-          arScene.add(model);
-          xrRef.current.model = model;
-          log('AR model ready — point at surface');
-        },
-        undefined,
-        (err: any) => log(`AR GLB err: ${err?.message}`),
-      );
-
-      setStatus('ar-active');
-      setPlaced(false);
-      setHint('Point camera at a flat surface');
-
-      // ── XR render loop ───────────────────────────────────────────────────
-      arRenderer.setAnimationLoop((_time: number, frame: any) => {
-        if (!frame) return;
-        const xr = xrRef.current;
-
-        // Hit-test surface detection (only if supported)
-        if (!xr.placed && xr.hitSrc) {
-          try {
-            const hits = frame.getHitTestResults(xr.hitSrc);
-            if (hits.length > 0) {
-              const pose = hits[0].getPose(xr.refSpace);
-              if (pose) {
-                reticle.visible = true;
-                reticle.matrix.fromArray(pose.transform.matrix);
-              }
-            } else {
-              reticle.visible = false;
-            }
-          } catch {
-            reticle.visible = false;
-          }
-        }
-
-        // No hit-test available — show reticle at fixed position in front
-        if (!xr.hitSrc && !xr.placed) {
-          reticle.visible = true;
-          reticle.matrixAutoUpdate = true;
-          reticle.position.set(0, -0.3, -0.8);
-        }
-
-        arRenderer.render(arScene, arCamera);
-      });
-
-      // ── Tap to place model ───────────────────────────────────────────────
-      session.addEventListener('select', () => {
-        const xr = xrRef.current;
-        if (xr.placed || !xr.model) return;
-
-        if (reticle.visible && xr.hitSrc) {
-          // Place at hit-test position
-          const pos = new THREE.Vector3();
-          const rot = new THREE.Quaternion();
-          const scl = new THREE.Vector3();
-          reticle.matrix.decompose(pos, rot, scl);
-          xr.model.position.copy(pos);
-          xr.model.quaternion.copy(rot);
-        } else {
-          // No hit-test — place 0.8m in front of camera
-          xr.model.position.set(0, -0.3, -0.8);
-        }
-
-        xr.model.visible = true;
-        reticle.visible  = false;
-        xr.placed        = true;
+    loader.load(
+      glbUrl,
+      (gltf: any) => {
+        model = gltf.scene;
+        const box   = new THREE.Box3().setFromObject(model);
+        const size  = box.getSize(new THREE.Vector3());
+        const scale = 0.4 / Math.max(size.x, size.y, size.z);
+        model.scale.setScalar(scale);
+        const center = box.getCenter(new THREE.Vector3());
+        model.position.sub(center.multiplyScalar(scale));
+        // Place model in center of view
+        model.position.set(0, -0.3, -1.2);
+        arScene.add(model);
+        xrRef.current.model = model;
+        log('AR model placed ✓');
         setPlaced(true);
-        setHint('Tap & drag to rotate · Pinch to scale');
-        log('Model placed! ✓');
-      });
+        setHint('Drag to rotate · Pinch to scale');
+      },
+      undefined,
+      (err: any) => log(`GLB err: ${err?.message}`),
+    );
 
-      session.addEventListener('end', () => {
-        log('XR session ended');
-        arRenderer.setAnimationLoop(null);
+    // ── Step 5: Touch controls for rotation + scale ───────────────────
+    let lastTouchX   = 0;
+    let lastTouchY   = 0;
+    let lastPinchDist = 0;
+    let modelScale   = 1.0;
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 1) {
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+      }
+      if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        lastPinchDist = Math.sqrt(dx * dx + dy * dy);
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      e.preventDefault();
+      const m = xrRef.current.model;
+      if (!m) return;
+
+      if (e.touches.length === 1) {
+        // Single finger — rotate model
+        const dx = (e.touches[0].clientX - lastTouchX) * 0.01;
+        const dy = (e.touches[0].clientY - lastTouchY) * 0.01;
+        m.rotation.y += dx;
+        m.rotation.x += dy;
+        lastTouchX = e.touches[0].clientX;
+        lastTouchY = e.touches[0].clientY;
+      }
+
+      if (e.touches.length === 2) {
+        // Two fingers — pinch to scale
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        const delta = dist / lastPinchDist;
+        modelScale = Math.max(0.2, Math.min(3.0, modelScale * delta));
+        const base = 0.4 / Math.max(1, 1); // base scale factor
+        m.scale.setScalar(base * modelScale);
+        lastPinchDist = dist;
+      }
+    };
+
+    arRenderer.domElement.addEventListener('touchstart', onTouchStart, { passive: false });
+    arRenderer.domElement.addEventListener('touchmove',  onTouchMove,  { passive: false });
+
+    // ── Step 6: Render loop ───────────────────────────────────────────
+    let animId = 0;
+    const tick = () => {
+      animId = requestAnimationFrame(tick);
+      // Gentle auto-rotation when not touching
+      if (xrRef.current.model && !xrRef.current.touching) {
+        xrRef.current.model.rotation.y += 0.005;
+      }
+      arRenderer.render(arScene, arCamera);
+    };
+    tick();
+
+    // ── Step 7: Store cleanup ─────────────────────────────────────────
+    Object.assign(xrRef.current, {
+      session:  null, // no XR session
+      renderer: arRenderer,
+      scene:    arScene,
+      camera:   arCamera,
+      placed:   true,
+      // Custom cleanup
+      cameraCleanup: () => {
+        cancelAnimationFrame(animId);
+        stream.getTracks().forEach(t => t.stop());
+        video.remove();
         arRenderer.domElement.remove();
         arRenderer.dispose();
-        setStatus('model-ready');
-        setPlaced(false);
-      });
+        arRenderer.domElement.removeEventListener('touchstart', onTouchStart);
+        arRenderer.domElement.removeEventListener('touchmove',  onTouchMove);
+      },
+    });
 
-    } catch (err: any) {
-      log(`XR error: ${err?.message ?? String(err)}`);
-      setErrorMsg(`WebXR failed: ${err?.message ?? 'Unknown error'}`);
-      setStatus('error');
+    setStatus('ar-active');
+    setPlaced(true);
+    setHint('Drag to rotate · Pinch to scale');
+    log('Camera AR active ✓');
+
+  } catch (err: any) {
+    log(`Camera AR error: ${err?.message}`);
+    if (err?.name === 'NotAllowedError') {
+      setErrorMsg('Camera permission denied. Please allow camera access and try again.');
+    } else {
+      setErrorMsg(`AR failed: ${err?.message ?? 'Unknown error'}`);
     }
+    setStatus('error');
   }
+}
 
   function endAR() {
-    xrRef.current.session?.end().catch(() => {});
+  // Camera-based AR cleanup
+  if (xrRef.current.cameraCleanup) {
+    xrRef.current.cameraCleanup();
+    xrRef.current.cameraCleanup = null;
   }
+  // WebXR cleanup
+  xrRef.current.session?.end().catch(() => {});
+  setStatus('model-ready');
+  setPlaced(false);
+}
 
-  function reposition() {
-    const xr = xrRef.current;
-    if (xr.model) xr.model.visible = false;
-    xr.placed = false;
-    setPlaced(false);
-    setHint('Point camera at a flat surface');
+ function reposition() {
+  const xr = xrRef.current;
+  if (xr.model) {
+    xr.model.position.set(0, -0.3, -1.2);
+    xr.model.rotation.set(0, 0, 0);
   }
-
+  setHint('Drag to rotate · Pinch to scale');
+}
   // ── AR ACTIVE overlay ─────────────────────────────────────────────────────
   if (status === 'ar-active') {
     return (
@@ -600,9 +607,9 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
       </div>
 
       {/* Mobile: AR launch button */}
-      {isMobile && status === 'model-ready' && (
-        <div className="flex flex-col gap-3">
-          {arSupport ? (
+     {isMobile && status === 'model-ready' && (
+      <div className="flex flex-col gap-3">
+        {true ? (
             <>
               <button
                 onClick={startAR}
