@@ -127,8 +127,8 @@ export default function MobileArViewer({ glbUrl, itemName, itemEmoji, onClose }:
         model.position.sub(centre.multiplyScalar(0.25 / maxDim));
 
         model.visible = false;
-        model.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh) {
+        model.traverse((child: any) => {
+          if (child.isMesh) {
             child.castShadow    = true;
             child.receiveShadow = true;
           }
