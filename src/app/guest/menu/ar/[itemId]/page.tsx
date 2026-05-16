@@ -203,13 +203,13 @@ export default function ARViewerPage() {
     );
 
     // Render loop
-    let animId: number;
-    const tick = () => {
-      animId = requestAnimationFrame(tick);
-      controls.update();
-      renderer.render(scene, camera);
-    };
-    tick();
+    let animId: number = 0;
+const tick = () => {
+  animId = requestAnimationFrame(tick);
+  controls.update();
+  renderer.render(scene, camera);
+};
+tick();
 
     const onResize = () => {
       const w2 = canvas.clientWidth  || 600;
