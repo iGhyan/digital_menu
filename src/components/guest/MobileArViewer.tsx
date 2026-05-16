@@ -109,7 +109,7 @@ export default function MobileArViewer({ glbUrl, itemName, itemEmoji, onClose }:
       scene.add(reticleGroup);
 
       // ── Load GLB model ────────────────────────────────────────────────────────
-      let model: THREE.Group | null = null;
+      let model: any = null;
       let modelPlaced = false;
 
       const loader = new GLTFLoader();
