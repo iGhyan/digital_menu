@@ -5,6 +5,9 @@ import {
   Loader2, AlertCircle, RotateCcw,
   ZoomIn, ZoomOut, Monitor, Smartphone,
 } from 'lucide-react';
+import * as THREE from 'three';
+import { GLTFLoader }    from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
 interface Props {
   glbUrl:    string;
@@ -14,16 +17,14 @@ interface Props {
 
 function isMobileDevice(): boolean {
   if (typeof window === 'undefined') return false;
-   const isNarrowScreen = window.innerWidth < 500;
-   const mobileUA = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
-  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-  const isNarrow = window.innerWidth <= 768;
-    return isNarrowScreen && mobileUA;
+  const isNarrowScreen = window.innerWidth < 500;
+  const mobileUA = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+  return isNarrowScreen && mobileUA;
 }
 
 async function checkWebXR(): Promise<boolean> {
   if (typeof navigator === 'undefined') return false;
-  if (!('xr' in navigator))            return false;
+  if (!('xr' in navigator)) return false;
   try {
     return await (navigator as any).xr.isSessionSupported('immersive-ar');
   } catch {
@@ -35,14 +36,14 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
   const canvasRef  = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
 
-  const [isMobile,   setIsMobile]   = useState(false);
- const [status, setStatus] = useState<string>('detecting');
-  const [loadPct,    setLoadPct]    = useState(0);
-  const [arSupport,  setArSupport]  = useState(false);
-  const [placed,     setPlaced]     = useState(false);
-  const [hint,       setHint]       = useState('');
-  const [errorMsg,   setErrorMsg]   = useState('');
-  const [debugLog,   setDebugLog]   = useState<string[]>([]);
+  const [isMobile,  setIsMobile]  = useState<boolean>(false);
+  const [status,    setStatus]    = useState<string>('detecting');
+  const [loadPct,   setLoadPct]   = useState<number>(0);
+  const [arSupport, setArSupport] = useState<boolean>(false);
+  const [placed,    setPlaced]    = useState<boolean>(false);
+  const [hint,      setHint]      = useState<string>('');
+  const [errorMsg,  setErrorMsg]  = useState<string>('');
+  const [debugLog,  setDebugLog]  = useState<string[]>([]);
 
   const log = (msg: string) => {
     console.log('[AR]', msg);
@@ -51,19 +52,24 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
 
   const threeRef = useRef<any>(null);
   const xrRef    = useRef<any>({
-    session: null, hitSrc: null, renderer: null,
-    scene: null, camera: null, reticle: null,
-    model: null, placed: false, refSpace: null,
+    session:  null,
+    hitSrc:   null,
+    renderer: null,
+    scene:    null,
+    camera:   null,
+    reticle:  null,
+    model:    null,
+    placed:   false,
+    refSpace: null,
   });
 
-  // ── Step 1: Detect device, load model for both mobile and desktop ────────
+  // ── Step 1: Detect device ─────────────────────────────────────────────────
   useEffect(() => {
     const mobile = isMobileDevice();
     setIsMobile(mobile);
     log(`Device: ${mobile ? 'MOBILE' : 'DESKTOP'}`);
     log(`Screen: ${window.innerWidth}x${window.innerHeight}`);
     log(`Touch: ${navigator.maxTouchPoints}`);
-    log(`UA: ${navigator.userAgent.slice(0, 40)}`);
 
     setStatus('loading-model');
 
@@ -84,25 +90,22 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     };
   }, [glbUrl]);
 
-  // ── Step 2: Once status=loading-model, start Three.js for both ──────────
+  // ── Step 2: Start Three.js once canvas is mounted ────────────────────────
   useEffect(() => {
     if (status !== 'loading-model') return;
-    if (!canvasRef.current)         return;
+    if (!canvasRef.current) return;
     loadModel();
   }, [status, isMobile]);
 
-  async function loadModel() {
+  // ── Three.js 360° viewer ─────────────────────────────────────────────────
+  function loadModel() {
     const canvas = canvasRef.current!;
-    log('Loading Three.js...');
-
-    const THREE             = await import('three');
-    const { GLTFLoader }    = await import('three/examples/jsm/loaders/GLTFLoader.js') as any;
-    const { OrbitControls } = await import('three/examples/jsm/controls/OrbitControls.js') as any;
+    log('Starting Three.js...');
 
     const w = canvas.clientWidth  || window.innerWidth;
     const h = canvas.clientHeight || 360;
 
-    const scene  = new THREE.Scene();
+    const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x0f0d0a);
 
     const camera = new THREE.PerspectiveCamera(45, w / h, 0.01, 100);
@@ -111,11 +114,10 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
     renderer.setPixelRatio(window.devicePixelRatio);
     renderer.setSize(w, h);
-    renderer.outputColorSpace  = (THREE as any).SRGBColorSpace;
-    renderer.toneMapping       = (THREE as any).ACESFilmicToneMapping;
+    renderer.outputColorSpace    = THREE.SRGBColorSpace;
+    renderer.toneMapping         = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.4;
 
-    // Lights
     scene.add(new THREE.AmbientLight(0xffffff, 1.0));
     const dir = new THREE.DirectionalLight(0xffeedd, 2.5);
     dir.position.set(3, 5, 3);
@@ -148,7 +150,6 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         model.position.sub(center.multiplyScalar(scale));
         model.position.y = -box.min.y * scale;
         scene.add(model);
-        xrRef.current.preloadedModel = gltf;
         setLoadPct(100);
         setStatus('model-ready');
         log('GLB loaded OK ✓');
@@ -161,7 +162,9 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
       },
       (err: any) => {
         log(`GLB error: ${err?.message}`);
-        setErrorMsg('Failed to load 3D model. The presigned URL may have expired — refresh the page.');
+        setErrorMsg(
+          'Failed to load 3D model. Presigned URL may have expired — refresh the page.',
+        );
         setStatus('error');
       },
     );
@@ -189,37 +192,35 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     };
   }
 
-  // ── WebXR AR session ─────────────────────────────────────────────────────
+  // ── WebXR AR session ──────────────────────────────────────────────────────
   async function startAR() {
     log('Starting WebXR AR...');
     try {
-      const THREE          = await import('three');
-      const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js') as any;
-
-      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-      renderer.setPixelRatio(window.devicePixelRatio);
-      renderer.xr.enabled = true;
-      renderer.outputColorSpace = (THREE as any).SRGBColorSpace;
-      renderer.domElement.style.cssText =
+      const arRenderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      arRenderer.setPixelRatio(window.devicePixelRatio);
+      arRenderer.xr.enabled = true;
+      arRenderer.outputColorSpace = THREE.SRGBColorSpace;
+      arRenderer.domElement.style.cssText =
         'position:fixed;top:0;left:0;width:100%;height:100%;z-index:9997;';
-      document.body.appendChild(renderer.domElement);
+      document.body.appendChild(arRenderer.domElement);
 
-      const scene  = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(
+      const arScene  = new THREE.Scene();
+      const arCamera = new THREE.PerspectiveCamera(
         70, window.innerWidth / window.innerHeight, 0.01, 20,
       );
-      scene.add(new THREE.AmbientLight(0xffffff, 1.5));
-      const dir = new THREE.DirectionalLight(0xffeedd, 2);
-      dir.position.set(1, 3, 1);
-      scene.add(dir);
 
-      // Gold reticle ring
+      arScene.add(new THREE.AmbientLight(0xffffff, 1.5));
+      const arDir = new THREE.DirectionalLight(0xffeedd, 2);
+      arDir.position.set(1, 3, 1);
+      arScene.add(arDir);
+
+      // Gold reticle ring for surface detection
       const geo     = new THREE.RingGeometry(0.08, 0.11, 32).rotateX(-Math.PI / 2);
       const mat     = new THREE.MeshBasicMaterial({ color: 0xd4a34e, side: THREE.DoubleSide });
       const reticle = new THREE.Mesh(geo, mat);
       reticle.matrixAutoUpdate = false;
       reticle.visible = false;
-      scene.add(reticle);
+      arScene.add(reticle);
 
       log('Requesting XR session...');
       const sessionInit: any = {
@@ -235,16 +236,22 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
       );
       log('XR session granted ✓');
 
-      renderer.xr.setReferenceSpaceType('local');
-      await renderer.xr.setSession(session);
+      arRenderer.xr.setReferenceSpaceType('local');
+      await arRenderer.xr.setSession(session);
 
       const refSpace  = await session.requestReferenceSpace('local');
       const viewerSpc = await session.requestReferenceSpace('viewer');
       const hitSrc    = await (session as any).requestHitTestSource({ space: viewerSpc });
 
       Object.assign(xrRef.current, {
-        session, hitSrc, renderer, scene,
-        camera, reticle, refSpace, placed: false,
+        session,
+        hitSrc,
+        renderer: arRenderer,
+        scene:    arScene,
+        camera:   arCamera,
+        reticle,
+        refSpace,
+        placed:   false,
       });
 
       // Load GLB for AR
@@ -258,7 +265,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
           const scale = 0.25 / Math.max(size.x, size.y, size.z);
           model.scale.setScalar(scale);
           model.visible = false;
-          scene.add(model);
+          arScene.add(model);
           xrRef.current.model = model;
           log('AR model ready — point at surface');
         },
@@ -270,7 +277,8 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
       setPlaced(false);
       setHint('Point camera at a flat surface');
 
-      renderer.setAnimationLoop((_time: number, frame: any) => {
+      // XR render loop
+      arRenderer.setAnimationLoop((_time: number, frame: any) => {
         if (!frame) return;
         const xr = xrRef.current;
         if (!xr.placed && xr.hitSrc) {
@@ -285,10 +293,10 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
             reticle.visible = false;
           }
         }
-        renderer.render(scene, camera);
+        arRenderer.render(arScene, arCamera);
       });
 
-      // Tap to place
+      // Tap to place model
       session.addEventListener('select', () => {
         const xr = xrRef.current;
         if (!xr.placed && reticle.visible && xr.model) {
@@ -309,9 +317,9 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
 
       session.addEventListener('end', () => {
         log('XR session ended');
-        renderer.setAnimationLoop(null);
-        renderer.domElement.remove();
-        renderer.dispose();
+        arRenderer.setAnimationLoop(null);
+        arRenderer.domElement.remove();
+        arRenderer.dispose();
         setStatus('model-ready');
         setPlaced(false);
       });
@@ -335,7 +343,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     setHint('Point camera at a flat surface');
   }
 
-  // ── AR ACTIVE overlay ────────────────────────────────────────────────────
+  // ── AR ACTIVE overlay ─────────────────────────────────────────────────────
   if (status === 'ar-active') {
     return (
       <div
@@ -351,8 +359,10 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
             background: 'linear-gradient(to bottom,rgba(0,0,0,0.75),transparent)',
           }}
         >
-          <div className="flex items-center gap-2 rounded-full px-3 py-1.5"
-            style={{ background: 'rgba(0,0,0,0.6)' }}>
+          <div
+            className="flex items-center gap-2 rounded-full px-3 py-1.5"
+            style={{ background: 'rgba(0,0,0,0.6)' }}
+          >
             <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
             <span className="text-white text-[12px] font-medium">AR Live</span>
           </div>
@@ -363,15 +373,15 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
 
           <button
             onClick={endAR}
-            style={{ pointerEvents: 'auto', background: 'rgba(0,0,0,0.6)' }}
             className="rounded-full px-4 py-1.5 text-white text-[13px] font-medium"
+            style={{ pointerEvents: 'auto', background: 'rgba(0,0,0,0.6)' }}
           >
             Exit AR
           </button>
         </div>
 
-        {/* Debug */}
-        <div className="absolute left-4 right-4" style={{ top: 90 }}>
+        {/* Debug lines */}
+        <div className="absolute left-4 right-4" style={{ top: 90, pointerEvents: 'none' }}>
           {debugLog.slice(-3).map((l, i) => (
             <p key={i} className="text-[10px] text-white/50 font-mono">{l}</p>
           ))}
@@ -380,10 +390,12 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         {/* Hint */}
         <div
           className="absolute left-0 right-0 flex justify-center"
-          style={{ bottom: 150 }}
+          style={{ bottom: 150, pointerEvents: 'none' }}
         >
-          <div className="rounded-full px-5 py-2.5"
-            style={{ background: 'rgba(0,0,0,0.65)' }}>
+          <div
+            className="rounded-full px-5 py-2.5"
+            style={{ background: 'rgba(0,0,0,0.65)' }}
+          >
             <p className="text-white text-[13px] text-center">{hint}</p>
           </div>
         </div>
@@ -397,7 +409,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
             <button
               onClick={reposition}
               className="flex items-center gap-2 rounded-full px-5 py-2.5 text-white text-[13px]"
-              style={{ background: 'rgba(0,0,0,0.65)', pointerEvents: 'auto' }}
+              style={{ background: 'rgba(0,0,0,0.65)' }}
             >
               <RotateCcw size={15} /> Reposition
             </button>
@@ -407,7 +419,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     );
   }
 
-  // ── ERROR ────────────────────────────────────────────────────────────────
+  // ── ERROR ─────────────────────────────────────────────────────────────────
   if (status === 'error') {
     return (
       <div
@@ -432,12 +444,11 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     );
   }
 
-  // ── 3D CANVAS (shared for both mobile preview + desktop) ─────────────────
-  // This renders for: detecting, loading-model, model-ready
+  // ── CANVAS — desktop 360° + mobile 3D preview ─────────────────────────────
   return (
     <div className="w-full flex flex-col gap-4">
 
-      {/* Canvas container */}
+      {/* Canvas */}
       <div
         className="relative w-full rounded-[24px] overflow-hidden border border-white/[0.06]"
         style={{ height: isMobile ? 360 : 480, background: '#0f0d0a' }}
@@ -455,10 +466,15 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
             style={{ background: 'rgba(15,13,10,0.92)' }}
           >
             <div className="text-[60px] opacity-40">{emoji}</div>
-            <div className="flex items-center gap-2" style={{ color: 'rgba(255,255,255,0.4)' }}>
+            <div
+              className="flex items-center gap-2"
+              style={{ color: 'rgba(255,255,255,0.4)' }}
+            >
               <Loader2 size={16} className="animate-spin" />
               <span className="text-[13px]">
-                {status === 'detecting' ? 'Detecting device…' : `Loading 3D model… ${loadPct}%`}
+                {status === 'detecting'
+                  ? 'Detecting device…'
+                  : `Loading 3D model… ${loadPct}%`}
               </span>
             </div>
             <div
@@ -470,11 +486,13 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
                 style={{ width: `${loadPct}%`, background: 'rgba(212,163,78,0.6)' }}
               />
             </div>
-            {/* Debug */}
             <div className="mt-2 px-4">
               {debugLog.map((l, i) => (
-                <p key={i} className="text-[10px] font-mono text-center"
-                  style={{ color: 'rgba(255,255,255,0.25)' }}>
+                <p
+                  key={i}
+                  className="text-[10px] font-mono text-center"
+                  style={{ color: 'rgba(255,255,255,0.25)' }}
+                >
                   {l}
                 </p>
               ))}
@@ -482,28 +500,20 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
           </div>
         )}
 
-        {/* Desktop badge */}
-        {status === 'model-ready' && !isMobile && (
+        {/* Badge */}
+        {status === 'model-ready' && (
           <div
             className="absolute top-4 left-4 flex items-center gap-2 rounded-full px-3 py-1.5"
             style={{ background: 'rgba(0,0,0,0.55)' }}
           >
-            <Monitor size={13} style={{ color: '#d4a34e' }} />
-            <span className="text-[11px] font-medium" style={{ color: 'rgba(255,255,255,0.6)' }}>
-              360° View — Drag to rotate
-            </span>
-          </div>
-        )}
-
-        {/* Mobile preview badge */}
-        {status === 'model-ready' && isMobile && (
-          <div
-            className="absolute top-4 left-4 flex items-center gap-2 rounded-full px-3 py-1.5"
-            style={{ background: 'rgba(0,0,0,0.55)' }}
-          >
-            <Smartphone size={13} style={{ color: '#d4a34e' }} />
-            <span className="text-[11px] font-medium" style={{ color: 'rgba(255,255,255,0.6)' }}>
-              3D Preview
+            {isMobile
+              ? <Smartphone size={13} style={{ color: '#d4a34e' }} />
+              : <Monitor    size={13} style={{ color: '#d4a34e' }} />}
+            <span
+              className="text-[11px] font-medium"
+              style={{ color: 'rgba(255,255,255,0.6)' }}
+            >
+              {isMobile ? '3D Preview' : '360° View — Drag to rotate'}
             </span>
           </div>
         )}
@@ -514,7 +524,6 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
             {[
               {
                 icon: <RotateCcw size={15} />,
-                title: 'Toggle auto-rotate',
                 action: () => {
                   if (threeRef.current?.controls)
                     threeRef.current.controls.autoRotate =
@@ -523,7 +532,6 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
               },
               {
                 icon: <ZoomIn size={15} />,
-                title: 'Zoom in',
                 action: () => {
                   if (threeRef.current?.camera)
                     threeRef.current.camera.position.multiplyScalar(0.85);
@@ -531,7 +539,6 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
               },
               {
                 icon: <ZoomOut size={15} />,
-                title: 'Zoom out',
                 action: () => {
                   if (threeRef.current?.camera)
                     threeRef.current.camera.position.multiplyScalar(1.15);
@@ -540,7 +547,6 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
             ].map((btn, i) => (
               <button
                 key={i}
-                title={btn.title}
                 onClick={btn.action}
                 className="w-9 h-9 rounded-xl flex items-center justify-center border border-white/10 transition-all"
                 style={{ background: 'rgba(0,0,0,0.55)', color: 'rgba(255,255,255,0.5)' }}
@@ -559,7 +565,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         </p>
       </div>
 
-      {/* Mobile: Launch AR button below the 3D preview */}
+      {/* Mobile: AR launch button */}
       {isMobile && status === 'model-ready' && (
         <div className="flex flex-col gap-3">
           {arSupport ? (
@@ -575,20 +581,23 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
                 <Smartphone size={22} />
                 Launch AR View
               </button>
-              <p className="text-center text-[11px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
+              <p
+                className="text-center text-[11px]"
+                style={{ color: 'rgba(255,255,255,0.2)' }}
+              >
                 Places the dish on your real table using your camera
               </p>
             </>
           ) : (
             <div
-              className="w-full rounded-2xl p-4 border border-white/[0.06] text-center"
+              className="w-full rounded-2xl p-4 border border-white/[0.06]"
               style={{ background: '#111114' }}
             >
-              <p className="text-[13px] text-white/40 mb-3">
-                WebXR AR not available on this browser
+              <p className="text-[13px] text-white/40 mb-2 text-center">
+                WebXR AR not available
               </p>
-              <p className="text-[11px] text-white/25 mb-3">
-                Enable these flags in Chrome then refresh:
+              <p className="text-[11px] text-white/25 mb-3 text-center">
+                Enable in Chrome then refresh:
               </p>
               {[
                 'chrome://flags/#unsafely-treat-insecure-origin-as-secure',
@@ -597,10 +606,13 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
               ].map((flag) => (
                 <div
                   key={flag}
-                  className="mb-2 px-3 py-2 rounded-xl border border-white/[0.07] text-left"
+                  className="mb-2 px-3 py-2 rounded-xl border border-white/[0.07]"
                   style={{ background: 'rgba(255,255,255,0.03)' }}
                 >
-                  <p className="text-[10px] font-mono break-all" style={{ color: '#d4a34e' }}>
+                  <p
+                    className="text-[10px] font-mono break-all"
+                    style={{ color: '#d4a34e' }}
+                  >
                     {flag}
                   </p>
                 </div>
@@ -610,9 +622,33 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         </div>
       )}
 
-   
+      {/* Debug panel */}
+      {debugLog.length > 0 && status === 'model-ready' && (
+        <div
+          className="rounded-xl p-3 border border-white/[0.05]"
+          style={{ background: 'rgba(0,0,0,0.4)' }}
+        >
+          <p className="text-[9px] text-white/15 uppercase tracking-widest mb-1 font-mono">
+            Debug
+          </p>
+          {debugLog.map((l, i) => (
+            <p key={i} className="text-[10px] text-white/30 font-mono leading-relaxed">
+              {l}
+            </p>
+          ))}
+          <p
+            className="text-[10px] font-mono mt-1"
+            style={{ color: arSupport ? '#81c784' : '#ef6e6b' }}
+          >
+            WebXR: {arSupport ? 'SUPPORTED ✓' : 'NOT SUPPORTED ✗'}
+          </p>
+          <p className="text-[10px] text-white/20 font-mono">
+            Protocol: {typeof window !== 'undefined' ? window.location.protocol : ''}
+          </p>
+        </div>
+      )}
 
-      {/* DOM overlay for WebXR */}
+      {/* DOM overlay div for WebXR */}
       <div
         ref={overlayRef}
         className="fixed inset-0 pointer-events-none"
