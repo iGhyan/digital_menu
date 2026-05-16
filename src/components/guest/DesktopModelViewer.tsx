@@ -124,13 +124,12 @@ export default function DesktopModelViewer({ glbUrl, itemName, itemEmoji }: Desk
             model.position.y += size.y * scale * 0.1; // lift slightly above ring
 
             // Enable shadows on all meshes
-            model.traverse((child) => {
-              if ((child as THREE.Mesh).isMesh) {
+           model.traverse((child: any) => {
+              if (child.isMesh) {
                 child.castShadow    = true;
                 child.receiveShadow = true;
               }
             });
-
             scene.add(model);
             setLoading(false);
           },
