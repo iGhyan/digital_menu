@@ -663,31 +663,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
         </div>
       )}
 
-      {/* Debug panel */}
-      {debugLog.length > 0 && status === 'model-ready' && (
-        <div
-          className="rounded-xl p-3 border border-white/[0.05]"
-          style={{ background: 'rgba(0,0,0,0.4)' }}
-        >
-          <p className="text-[9px] text-white/15 uppercase tracking-widest mb-1 font-mono">
-            Debug
-          </p>
-          {debugLog.map((l, i) => (
-            <p key={i} className="text-[10px] text-white/30 font-mono leading-relaxed">
-              {l}
-            </p>
-          ))}
-          <p
-            className="text-[10px] font-mono mt-1"
-            style={{ color: arSupport ? '#81c784' : '#ef6e6b' }}
-          >
-            WebXR: {arSupport ? 'SUPPORTED ✓' : 'NOT SUPPORTED ✗'}
-          </p>
-          <p className="text-[10px] text-white/20 font-mono">
-            Protocol: {typeof window !== 'undefined' ? window.location.protocol : ''}
-          </p>
-        </div>
-      )}
+
 
       {/* DOM overlay div for WebXR */}
       <div

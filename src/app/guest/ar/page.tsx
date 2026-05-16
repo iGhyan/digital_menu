@@ -15,7 +15,7 @@ export default async function ARPage({ searchParams }: Props) {
   return (
     <ARPageClient
       restaurantId={params.rid   ?? '2687382e-3b00-4f57-9014-f484df89e3fe'}
-      itemId={params.iid         ?? '05014285-09e4-47af-82ad-07545df3fa93'}
+      itemId={params.iid         ?? 'ba30dab0-8323-4ed6-8d60-716fb8b6b4b0'}
       itemName={params.name      ?? 'Menu Item'}
       emoji={params.emoji        ?? '🍽️'}
     />
