@@ -221,9 +221,9 @@ export default function AdminQRPage() {
           <div key={r.id} className="border border-ink-200 rounded-2xl p-5 flex flex-col items-center gap-3 w-[200px] break-inside-avoid">
             <img src={r.qrDataUrl} alt={`Table ${r.tableNumber}`} className="w-[140px] h-[140px]" />
             <div className="text-center">
-              <p className="font-serif text-[16px] font-semibold text-ink-900">Table {r.tableNumber}</p>
-              <p className="text-[11px] text-ink-400">{r.zone}</p>
-              <p className="text-[9px] text-ink-300 mt-1 font-mono break-all">{r.tableId}</p>
+              <p className="font-serif text-[16px] font-semibold text-black">Table {r.tableNumber}</p>
+              <p className="text-[11px] text-black">{r.zone}</p>
+              <p className="text-[9px] text-black mt-1 font-mono break-all">{r.tableId}</p>
             </div>
           </div>
         ))}
@@ -232,17 +232,17 @@ export default function AdminQRPage() {
       {/* ── Top bar ── */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-ink-100 bg-white">
         <div>
-          <h1 className="font-serif text-[20px] text-ink-900 font-semibold">QR Code Management</h1>
-          <p className="text-[12px] text-ink-400">Encode restaurantId + tableId → generate PNG/SVG → store in S3</p>
+          <h1 className="font-serif text-[20px] text-black font-semibold">QR Code Management</h1>
+          <p className="text-[12px] text-black">Encode restaurantId + tableId → generate PNG/SVG → store in S3</p>
         </div>
         <div className="flex items-center gap-2.5">
           <button onClick={downloadAll} disabled={dlAll}
-            className="h-9 px-3.5 rounded-xl bg-ink-50 border border-ink-200 text-ink-600 text-[13px] font-semibold flex items-center gap-1.5 hover:bg-ink-100 transition-colors disabled:opacity-50">
+            className="h-9 px-3.5 rounded-xl bg-black border border-ink-200 text-white text-[13px] font-semibold flex items-center gap-1.5 hover:bg-ink-100 transition-colors disabled:opacity-50">
             {dlAll ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />}
             {dlAll ? 'Generating…' : 'Print All'}
           </button>
           <button onClick={() => setShowNewForm(true)}
-            className="h-9 px-3.5 rounded-xl bg-brand-500 text-white text-[13px] font-semibold flex items-center gap-1.5 hover:bg-brand-600 transition-colors shadow-brand">
+            className="h-9 px-3.5 rounded-xl bg-black text-white text-[13px] font-semibold flex items-center gap-1.5 hover:bg-brand-600 transition-colors shadow-brand">
             <Plus size={15} /> Add Table
           </button>
         </div>
@@ -253,15 +253,15 @@ export default function AdminQRPage() {
         {/* Stats */}
         <div className="grid grid-cols-4 gap-3 mb-6">
           {[
-            { label: 'Total Tables', val: stats.total,     icon: '🪑', color: 'text-ink-700'    },
-            { label: 'Linked',       val: stats.linked,    icon: '🔗', color: 'text-brand-600'  },
+            { label: 'Total Tables', val: stats.total,     icon: '🪑', color: 'text-black'    },
+            { label: 'Linked',       val: stats.linked,    icon: '🔗', color: 'text-red-600'  },
             { label: 'QR Generated', val: stats.generated, icon: '📱', color: 'text-green-600'  },
             { label: 'Zones',        val: stats.zones,     icon: '🏛️', color: 'text-purple-600' },
           ].map(s => (
             <div key={s.label} className="bg-white border border-ink-100 rounded-2xl p-4 shadow-card">
               <span className="text-xl mb-2 block">{s.icon}</span>
               <p className={`font-serif text-[28px] font-semibold ${s.color}`}>{s.val}</p>
-              <p className="text-[11px] text-ink-400 uppercase tracking-widest font-semibold mt-0.5">{s.label}</p>
+              <p className="text-[11px] text-black uppercase tracking-widest font-semibold mt-0.5">{s.label}</p>
             </div>
           ))}
         </div>
@@ -289,7 +289,7 @@ export default function AdminQRPage() {
               className={`px-3.5 py-1.5 rounded-full border text-[12px] font-semibold transition-all ${
                 zoneFilter === z
                   ? 'bg-brand-500 border-brand-500 text-white shadow-brand'
-                  : 'bg-white border-ink-200 text-ink-500 hover:border-brand-300'
+                  : 'bg-white border-ink-200 text-black hover:border-brand-300'
               }`}>
               {z}
             </button>
@@ -308,21 +308,21 @@ export default function AdminQRPage() {
                   <img src={record.qrDataUrl} alt={`Table ${record.tableNumber}`} className="w-full h-full object-contain p-4" />
                 ) : (
                   <div className="flex flex-col items-center gap-2">
-                    <QrCode size={40} className="text-ink-200" />
-                    <p className="text-[10px] text-ink-300 font-medium">Click to generate</p>
+                    <QrCode size={40} className="text-black" />
+                    <p className="text-[10px] text-black font-medium">Click to generate</p>
                   </div>
                 )}
                 <div className="absolute inset-0 bg-brand-500/80 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Eye size={20} className="text-white" />
-                  <span className="text-white text-[13px] font-semibold">Preview</span>
+                  <Eye size={20} className="text-black" />
+                  <span className="text-black text-[13px] font-semibold">Preview</span>
                 </div>
               </div>
 
               <div className="p-3.5">
                 <div className="flex items-start justify-between mb-1.5">
                   <div>
-                    <p className="text-[14px] font-semibold text-ink-900">Table {record.tableNumber}</p>
-                    <p className="text-[11px] text-ink-400 flex items-center gap-1">
+                    <p className="text-[14px] font-semibold text-black">Table {record.tableNumber}</p>
+                    <p className="text-[11px] text-black flex items-center gap-1">
                       <MapPin size={10} />{record.zone}
                     </p>
                   </div>
@@ -335,19 +335,19 @@ export default function AdminQRPage() {
 
                 <div className="flex items-center gap-1.5 bg-ink-50 rounded-xl px-2.5 py-1.5 mb-3 cursor-pointer hover:bg-brand-50 transition-colors"
                   onClick={() => copyUrl(record)}>
-                  <p className="text-[10px] text-ink-400 font-mono-dm flex-1 truncate">{record.encodedUrl}</p>
+                  <p className="text-[10px] text-black font-mono-dm flex-1 truncate">{record.encodedUrl}</p>
                   {copiedId === record.id
                     ? <CheckCheck size={11} className="text-green-500 flex-shrink-0" />
-                    : <Copy size={11} className="text-ink-300 flex-shrink-0" />}
+                    : <Copy size={11} className="text-black flex-shrink-0" />}
                 </div>
 
                 <div className="flex gap-1.5">
                   <button onClick={() => openPreview(record)}
-                    className="flex-1 h-8 rounded-xl bg-brand-50 border border-brand-200 text-[11px] font-semibold text-brand-700 flex items-center justify-center gap-1 hover:bg-brand-100 transition-all">
+                    className="flex-1 h-8 rounded-xl bg-black border border-brand-200 text-[11px] font-semibold text-brand-700 flex items-center justify-center gap-1 hover:bg-brand-100 transition-all">
                     <Eye size={11} /> View
                   </button>
                   <button onClick={() => downloadQR(record)}
-                    className="flex-1 h-8 rounded-xl bg-ink-50 border border-ink-200 text-[11px] font-semibold text-ink-600 flex items-center justify-center gap-1 hover:bg-ink-100 transition-all">
+                    className="flex-1 h-8 rounded-xl bg-black border border-ink-200 text-[11px] font-semibold text-white flex items-center justify-center gap-1 hover:bg-ink-100 transition-all">
                     <Download size={11} /> Save
                   </button>
                   <button onClick={() => deleteRecord(record.id)}
@@ -369,14 +369,14 @@ export default function AdminQRPage() {
 
             <div className="flex items-center justify-between px-6 py-4 border-b border-ink-100">
               <div>
-                <h2 className="font-serif text-[18px] text-ink-900 font-semibold">
+                <h2 className="font-serif text-[18px] text-black font-semibold">
                   Table {preview.tableNumber} — QR Code
                 </h2>
-                <p className="text-[12px] text-ink-400">{preview.zone} · {preview.outlet}</p>
+                <p className="text-[12px] text-black">{preview.zone} · {preview.outlet}</p>
               </div>
               <button onClick={() => setPreview(null)}
                 className="w-8 h-8 rounded-xl bg-ink-50 border border-ink-200 flex items-center justify-center">
-                <X size={14} className="text-ink-500" />
+                <X size={14} className="text-black" />
               </button>
             </div>
 
@@ -386,7 +386,7 @@ export default function AdminQRPage() {
                   {genState === 'generating' && (
                     <div className="flex flex-col items-center gap-3">
                       <Loader2 size={32} className="animate-spin text-brand-400" />
-                      <p className="text-[12px] text-ink-400">Generating QR code…</p>
+                      <p className="text-[12px] text-black">Generating QR code…</p>
                     </div>
                   )}
                   {genState === 'done' && previewImg && (
@@ -409,14 +409,14 @@ export default function AdminQRPage() {
                   { label: 'Created',       val: new Date(preview.createdAt).toLocaleDateString() },
                 ].map(m => (
                   <div key={m.label} className="bg-ink-50 rounded-xl p-2.5 border border-ink-100">
-                    <p className="text-[10px] text-ink-400 uppercase tracking-widest font-semibold mb-0.5">{m.label}</p>
-                    <p className="text-[12px] text-ink-700 font-semibold font-mono-dm truncate">{m.val}</p>
+                    <p className="text-[10px] text-black uppercase tracking-widest font-semibold mb-0.5">{m.label}</p>
+                    <p className="text-[12px] text-black font-semibold font-mono-dm truncate">{m.val}</p>
                   </div>
                 ))}
               </div>
 
               <div className="mb-4">
-                <p className="text-[11px] text-ink-400 uppercase tracking-widest font-semibold mb-1.5">
+                <p className="text-[11px] text-black uppercase tracking-widest font-semibold mb-1.5">
                   Encoded URL (scanning opens this)
                 </p>
                 <div className="flex items-center gap-2 bg-ink-50 border border-ink-100 rounded-xl px-3 py-2.5">
@@ -426,21 +426,21 @@ export default function AdminQRPage() {
                       className="w-7 h-7 rounded-lg bg-white border border-ink-200 flex items-center justify-center hover:bg-brand-50 transition-colors">
                       {copiedId === preview.id
                         ? <CheckCheck size={12} className="text-green-500" />
-                        : <Copy size={12} className="text-ink-400" />}
+                        : <Copy size={12} className="text-black" />}
                     </button>
                     <a href={preview.encodedUrl} target="_blank" rel="noopener noreferrer"
                       className="w-7 h-7 rounded-lg bg-white border border-ink-200 flex items-center justify-center hover:bg-brand-50 transition-colors">
-                      <ExternalLink size={12} className="text-ink-400" />
+                      <ExternalLink size={12} className="text-black" />
                     </a>
                   </div>
                 </div>
               </div>
 
               <div className="mb-5">
-                <p className="text-[11px] text-ink-400 uppercase tracking-widest font-semibold mb-1.5">S3 Storage Path</p>
+                <p className="text-[11px] text-black uppercase tracking-widest font-semibold mb-1.5">S3 Storage Path</p>
                 <div className="bg-ink-50 border border-ink-100 rounded-xl px-3 py-2.5">
-                  <p className="text-[10px] text-ink-500 font-mono-dm break-all">{preview.s3Key}</p>
-                  <p className="text-[9px] text-ink-300 font-mono-dm break-all mt-0.5">{preview.s3Url}</p>
+                  <p className="text-[10px] text-black font-mono-dm break-all">{preview.s3Key}</p>
+                  <p className="text-[9px] text-black font-mono-dm break-all mt-0.5">{preview.s3Url}</p>
                 </div>
               </div>
 
@@ -458,7 +458,7 @@ export default function AdminQRPage() {
                     }
                   }}
                   disabled={!previewImg}
-                  className="h-11 px-4 rounded-xl bg-ink-50 border border-ink-200 text-ink-600 text-[13px] font-semibold flex items-center gap-2 hover:bg-ink-100 transition-colors disabled:opacity-40">
+                  className="h-11 px-4 rounded-xl bg-ink-50 border border-ink-200 text-black text-[13px] font-semibold flex items-center gap-2 hover:bg-ink-100 transition-colors disabled:opacity-40">
                   <Printer size={15} /> Print
                 </button>
               </div>
@@ -480,15 +480,15 @@ export default function AdminQRPage() {
           onClick={e => e.target === e.currentTarget && setShowNewForm(false)}>
           <div className="bg-white border border-ink-100 rounded-3xl w-[380px] p-6 shadow-card-lg">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="font-serif text-[18px] text-ink-900 font-semibold">Add New Table</h2>
+              <h2 className="font-serif text-[18px] text-black font-semibold">Add New Table</h2>
               <button onClick={() => setShowNewForm(false)}
                 className="w-8 h-8 rounded-xl bg-ink-50 border border-ink-200 flex items-center justify-center">
-                <X size={14} className="text-ink-500" />
+                <X size={14} className="text-black" />
               </button>
             </div>
 
             <div className="mb-4">
-              <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">
+              <label className="block text-[11px] text-black uppercase tracking-widest font-semibold mb-1.5">
                 Table Number
               </label>
               <input value={newTable.number}
@@ -498,12 +498,12 @@ export default function AdminQRPage() {
             </div>
 
             <div className="mb-4">
-              <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">Zone</label>
+              <label className="block text-[11px] text-black uppercase tracking-widest font-semibold mb-1.5">Zone</label>
               <div className="flex gap-2 flex-wrap">
                 {['Main Hall', 'Garden Terrace', 'Private Dining', 'Lounge Bar'].map(z => (
                   <button key={z} onClick={() => setNewTable(p => ({ ...p, zone: z, outlet: z }))}
                     className={`px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-all ${
-                      newTable.zone === z ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-ink-200 text-ink-500'
+                      newTable.zone === z ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-ink-200 text-black'
                     }`}>
                     {z}
                   </button>
@@ -521,7 +521,7 @@ export default function AdminQRPage() {
 
             <div className="flex gap-2">
               <button onClick={() => setShowNewForm(false)}
-                className="flex-1 h-10 rounded-xl bg-ink-50 border border-ink-200 text-[13px] font-semibold text-ink-500 hover:bg-ink-100 transition-colors">
+                className="flex-1 h-10 rounded-xl bg-ink-50 border border-ink-200 text-[13px] font-semibold text-black hover:bg-ink-100 transition-colors">
                 Cancel
               </button>
               <button onClick={addTable} disabled={!newTable.number.trim()}

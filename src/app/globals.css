@@ -42,7 +42,7 @@
   .phone-shell {
     width: 100%;
     background-color: #181818;
-    border-radius: 40px;
+   
     border: 1px solid rgba(212,163,78,0.2);
     overflow: hidden;
     display: flex;

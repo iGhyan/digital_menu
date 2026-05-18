@@ -6,7 +6,7 @@ import { LiveDot } from '@/components/ui';
 
 export default function GuestLandingPage() {
   return (
-    <main className="min-h-dvh bg-surface flex flex-col items-center justify-center p-6">
+    <main className="min-h-dvh bg-surface flex flex-col items-center justify-center ">
       {/* Background glow */}
       <div
         className="fixed inset-0 pointer-events-none"
@@ -19,14 +19,6 @@ export default function GuestLandingPage() {
       {/* Phone shell */}
       <div className="phone-shell shadow-shell">
 
-        {/* Status bar */}
-        <div className="flex justify-between items-center px-6 pt-3.5 text-xs text-white/35 font-medium">
-          <span>9:41</span>
-          <span className="flex gap-1.5 items-center">
-            <Radio size={12} />
-            <span>●●●</span>
-          </span>
-        </div>
 
         {/* Hero */}
         <div className="flex flex-col items-center px-6 pt-5 pb-0">
