@@ -1,13 +1,28 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import {
-  Download, Printer, Eye, X, Plus, RefreshCw,
-  Copy, CheckCheck, Layers, QrCode, MapPin,
+  Download, Printer, Eye, X, Plus,
+  Copy, CheckCheck, QrCode, MapPin,
   ExternalLink, Trash2, AlertCircle, Loader2,
 } from 'lucide-react';
-import type { QrRecord } from '@/lib/types';
 import { INITIAL_QR_RECORDS, buildQrUrl } from '@/lib/qr';
+
+// ── Inline type — avoids import issues ───────────────────────────────────────
+interface QrRecord {
+  id:           string;
+  restaurantId: string;
+  tableId:      string;
+  tableNumber:  string;
+  zone:         string;
+  outlet:       string;
+  encodedUrl:   string;
+  s3Key:        string;
+  s3Url:        string;
+  createdAt:    string;
+  linked:       boolean;
+  qrDataUrl?:   string;
+}
 
 const RESTAURANT_ID = '2687382e-3b00-4f57-9014-f484df89e3fe';
 const ZONES = ['All Zones', 'Main Hall', 'Garden Terrace', 'Private Dining'];
@@ -15,7 +30,7 @@ const ZONES = ['All Zones', 'Main Hall', 'Garden Terrace', 'Private Dining'];
 type GenState = 'idle' | 'generating' | 'done' | 'error';
 
 export default function AdminQRPage() {
-  const [records,     setRecords]     = useState<QrRecord[]>(INITIAL_QR_RECORDS);
+  const [records,     setRecords]     = useState<QrRecord[]>(INITIAL_QR_RECORDS as QrRecord[]);
   const [zoneFilter,  setZoneFilter]  = useState('All Zones');
   const [preview,     setPreview]     = useState<QrRecord | null>(null);
   const [previewImg,  setPreviewImg]  = useState<string | null>(null);
@@ -25,7 +40,6 @@ export default function AdminQRPage() {
   const [dlAll,       setDlAll]       = useState(false);
   const [showNewForm, setShowNewForm] = useState(false);
   const [newTable,    setNewTable]    = useState({ number: '', zone: 'Main Hall', outlet: 'Main Hall' });
-  const [printMode,   setPrintMode]   = useState(false);
   const printRef = useRef<HTMLDivElement>(null);
 
   // ── Generate QR via API ────────────────────────────────────────────────────
@@ -76,15 +90,14 @@ export default function AdminQRPage() {
     if (!img) return;
 
     const a = document.createElement('a');
-    a.href = img;
-    a.download = `QR_Table${record.tableNumber}_${record.zone.replace(/\s/g,'_')}.png`;
+    a.href     = img;
+    a.download = `QR_Table${record.tableNumber}_${record.zone.replace(/\s/g, '_')}.png`;
     a.click();
   };
 
-  // ── Download all QRs as one HTML print sheet ──────────────────────────────
+  // ── Download all — generate missing then print ────────────────────────────
   const downloadAll = async () => {
     setDlAll(true);
-    // Generate all missing QR codes
     const updated = await Promise.all(records.map(async r => {
       if (r.qrDataUrl) return r;
       const img = await generateQR(r);
@@ -95,7 +108,7 @@ export default function AdminQRPage() {
     setTimeout(() => window.print(), 300);
   };
 
-  // ── Copy URL to clipboard ─────────────────────────────────────────────────
+  // ── Copy URL ──────────────────────────────────────────────────────────────
   const copyUrl = (record: QrRecord) => {
     navigator.clipboard.writeText(record.encodedUrl);
     setCopiedId(record.id);
@@ -105,8 +118,8 @@ export default function AdminQRPage() {
   // ── Add new table ─────────────────────────────────────────────────────────
   const addTable = async () => {
     if (!newTable.number.trim()) return;
-    const tableId = `T${newTable.number.padStart(2, '0')}`;
-    const baseUrl = window.location.origin;
+    const tableId  = `T${newTable.number.padStart(2, '0')}`;
+    const baseUrl  = window.location.origin;
 
     const record: QrRecord = {
       id:           crypto.randomUUID(),
@@ -125,11 +138,10 @@ export default function AdminQRPage() {
     setRecords(prev => [...prev, record]);
     setShowNewForm(false);
     setNewTable({ number: '', zone: 'Main Hall', outlet: 'Main Hall' });
-    // Auto-open preview
     setTimeout(() => openPreview(record), 300);
   };
 
-  // ── Delete ─────────────────────────────────────────────────────────────────
+  // ── Delete ────────────────────────────────────────────────────────────────
   const deleteRecord = (id: string) => {
     setRecords(prev => prev.filter(r => r.id !== id));
     if (preview?.id === id) setPreview(null);
@@ -138,10 +150,10 @@ export default function AdminQRPage() {
   const filtered = records.filter(r => zoneFilter === 'All Zones' || r.zone === zoneFilter);
 
   const stats = {
-    total:    records.length,
-    linked:   records.filter(r => r.linked).length,
+    total:     records.length,
+    linked:    records.filter(r => r.linked).length,
     generated: records.filter(r => r.qrDataUrl).length,
-    zones:    [...new Set(records.map(r => r.zone))].length,
+    zones:     [...new Set(records.map(r => r.zone))].length,
   };
 
   return (
@@ -193,15 +205,13 @@ export default function AdminQRPage() {
         {/* Stats */}
         <div className="grid grid-cols-4 gap-3 mb-6">
           {[
-            { label: 'Total Tables', val: stats.total,     icon: '🪑', color: 'text-ink-700' },
-            { label: 'Linked',       val: stats.linked,    icon: '🔗', color: 'text-brand-600' },
-            { label: 'QR Generated', val: stats.generated, icon: '📱', color: 'text-green-600' },
+            { label: 'Total Tables', val: stats.total,     icon: '🪑', color: 'text-ink-700'    },
+            { label: 'Linked',       val: stats.linked,    icon: '🔗', color: 'text-brand-600'  },
+            { label: 'QR Generated', val: stats.generated, icon: '📱', color: 'text-green-600'  },
             { label: 'Zones',        val: stats.zones,     icon: '🏛️', color: 'text-purple-600' },
           ].map(s => (
             <div key={s.label} className="bg-white border border-ink-100 rounded-2xl p-4 shadow-card">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="text-xl">{s.icon}</span>
-              </div>
+              <span className="text-xl mb-2 block">{s.icon}</span>
               <p className={`font-serif text-[28px] font-semibold ${s.color}`}>{s.val}</p>
               <p className="text-[11px] text-ink-400 uppercase tracking-widest font-semibold mt-0.5">{s.label}</p>
             </div>
@@ -214,10 +224,12 @@ export default function AdminQRPage() {
           <div className="flex-1 min-w-0">
             <p className="text-[13px] font-semibold text-brand-800 mb-1">QR URL Encoding Schema</p>
             <p className="text-[12px] text-brand-700 font-mono-dm break-all">
-              {`${typeof window !== 'undefined' ? window.location.origin : 'https://digital-menu-amber.vercel.app'}/guest?rid=<restaurantId>&tid=<tableId>`}
+              {typeof window !== 'undefined' ? window.location.origin : 'https://digital-menu-amber.vercel.app'}
+              {'/guest?rid=<restaurantId>&tid=<tableId>'}
             </p>
             <p className="text-[11px] text-brand-600 mt-1.5">
-              Scanning opens the guest PWA pre-loaded with the correct table session · S3 key: <span className="font-mono-dm">qr-codes/&#123;restaurantId&#125;/&#123;tableId&#125;.png</span>
+              Scanning opens the guest PWA pre-loaded with the correct table session ·{' '}
+              S3 key: <span className="font-mono-dm">qr-codes/&#123;restaurantId&#125;/&#123;tableId&#125;.png</span>
             </p>
           </div>
         </div>
@@ -243,8 +255,10 @@ export default function AdminQRPage() {
               className="bg-white border border-ink-100 rounded-2xl overflow-hidden shadow-card hover:border-brand-200 hover:shadow-card-lg transition-all group">
 
               {/* QR image area */}
-              <div className="aspect-square flex items-center justify-center bg-ink-50 relative overflow-hidden cursor-pointer"
-                onClick={() => openPreview(record)}>
+              <div
+                className="aspect-square flex items-center justify-center bg-ink-50 relative overflow-hidden cursor-pointer"
+                onClick={() => openPreview(record)}
+              >
                 {record.qrDataUrl ? (
                   <img src={record.qrDataUrl} alt={`Table ${record.tableNumber}`} className="w-full h-full object-contain p-4" />
                 ) : (
@@ -253,8 +267,6 @@ export default function AdminQRPage() {
                     <p className="text-[10px] text-ink-300 font-medium">Click to generate</p>
                   </div>
                 )}
-
-                {/* Hover overlay */}
                 <div className="absolute inset-0 bg-brand-500/80 flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <Eye size={20} className="text-white" />
                   <span className="text-white text-[13px] font-semibold">Preview</span>
@@ -266,16 +278,22 @@ export default function AdminQRPage() {
                 <div className="flex items-start justify-between mb-1.5">
                   <div>
                     <p className="text-[14px] font-semibold text-ink-900">Table {record.tableNumber}</p>
-                    <p className="text-[11px] text-ink-400 flex items-center gap-1"><MapPin size={10} />{record.zone}</p>
+                    <p className="text-[11px] text-ink-400 flex items-center gap-1">
+                      <MapPin size={10} />{record.zone}
+                    </p>
                   </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${record.linked ? 'chip-active' : 'chip-inactive'}`}>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                    record.linked ? 'chip-active' : 'chip-inactive'
+                  }`}>
                     {record.linked ? 'Linked' : 'Unlinked'}
                   </span>
                 </div>
 
                 {/* Encoded URL preview */}
-                <div className="flex items-center gap-1.5 bg-ink-50 rounded-xl px-2.5 py-1.5 mb-3 cursor-pointer hover:bg-brand-50 transition-colors"
-                  onClick={() => copyUrl(record)}>
+                <div
+                  className="flex items-center gap-1.5 bg-ink-50 rounded-xl px-2.5 py-1.5 mb-3 cursor-pointer hover:bg-brand-50 transition-colors"
+                  onClick={() => copyUrl(record)}
+                >
                   <p className="text-[10px] text-ink-400 font-mono-dm flex-1 truncate">{record.encodedUrl}</p>
                   {copiedId === record.id
                     ? <CheckCheck size={11} className="text-green-500 flex-shrink-0" />
@@ -305,14 +323,17 @@ export default function AdminQRPage() {
 
       {/* ── Preview Modal ── */}
       {preview && (
-        <div className="fixed inset-0 bg-ink-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-6"
-          onClick={e => e.target === e.currentTarget && setPreview(null)}>
+        <div
+          className="fixed inset-0 bg-ink-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-6"
+          onClick={e => e.target === e.currentTarget && setPreview(null)}
+        >
           <div className="bg-white border border-ink-100 rounded-3xl w-[480px] shadow-card-lg overflow-hidden">
 
-            {/* Modal header */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-ink-100">
               <div>
-                <h2 className="font-serif text-[18px] text-ink-900 font-semibold">Table {preview.tableNumber} — QR Code</h2>
+                <h2 className="font-serif text-[18px] text-ink-900 font-semibold">
+                  Table {preview.tableNumber} — QR Code
+                </h2>
                 <p className="text-[12px] text-ink-400">{preview.zone} · {preview.outlet}</p>
               </div>
               <button onClick={() => setPreview(null)}
@@ -348,7 +369,7 @@ export default function AdminQRPage() {
                 {[
                   { label: 'Table ID',      val: preview.tableId },
                   { label: 'Zone',          val: preview.zone },
-                  { label: 'Restaurant ID', val: `${preview.restaurantId.slice(0,8)}…` },
+                  { label: 'Restaurant ID', val: `${preview.restaurantId.slice(0, 8)}…` },
                   { label: 'Created',       val: new Date(preview.createdAt).toLocaleDateString() },
                 ].map(m => (
                   <div key={m.label} className="bg-ink-50 rounded-xl p-2.5 border border-ink-100">
@@ -360,13 +381,17 @@ export default function AdminQRPage() {
 
               {/* Encoded URL */}
               <div className="mb-4">
-                <p className="text-[11px] text-ink-400 uppercase tracking-widest font-semibold mb-1.5">Encoded URL (scanned opens this)</p>
+                <p className="text-[11px] text-ink-400 uppercase tracking-widest font-semibold mb-1.5">
+                  Encoded URL (scanning opens this)
+                </p>
                 <div className="flex items-center gap-2 bg-ink-50 border border-ink-100 rounded-xl px-3 py-2.5">
                   <p className="text-[11px] text-brand-600 font-mono-dm flex-1 break-all">{preview.encodedUrl}</p>
                   <div className="flex gap-1.5 flex-shrink-0">
                     <button onClick={() => copyUrl(preview)}
                       className="w-7 h-7 rounded-lg bg-white border border-ink-200 flex items-center justify-center hover:bg-brand-50 transition-colors">
-                      {copiedId === preview.id ? <CheckCheck size={12} className="text-green-500" /> : <Copy size={12} className="text-ink-400" />}
+                      {copiedId === preview.id
+                        ? <CheckCheck size={12} className="text-green-500" />
+                        : <Copy size={12} className="text-ink-400" />}
                     </button>
                     <a href={preview.encodedUrl} target="_blank" rel="noopener noreferrer"
                       className="w-7 h-7 rounded-lg bg-white border border-ink-200 flex items-center justify-center hover:bg-brand-50 transition-colors">
@@ -385,21 +410,28 @@ export default function AdminQRPage() {
                 </div>
               </div>
 
-              {/* Action buttons */}
+              {/* Buttons */}
               <div className="flex gap-2">
-                <button onClick={() => previewImg && downloadQR(preview)}
+                <button
+                  onClick={() => previewImg && downloadQR(preview)}
                   disabled={!previewImg}
                   className="flex-1 h-11 rounded-xl bg-brand-500 text-white text-[13px] font-semibold flex items-center justify-center gap-2 hover:bg-brand-600 transition-colors shadow-brand disabled:opacity-40">
                   <Download size={15} /> Download PNG
                 </button>
-                <button onClick={() => { if (previewImg) { const w = window.open('','_print'); w?.document.write(`<img src="${previewImg}" style="width:100%;max-width:400px;"/>`); w?.print(); } }}
+                <button
+                  onClick={() => {
+                    if (previewImg) {
+                      const w = window.open('', '_print');
+                      w?.document.write(`<img src="${previewImg}" style="width:100%;max-width:400px;"/>`);
+                      w?.print();
+                    }
+                  }}
                   disabled={!previewImg}
                   className="h-11 px-4 rounded-xl bg-ink-50 border border-ink-200 text-ink-600 text-[13px] font-semibold flex items-center gap-2 hover:bg-ink-100 transition-colors disabled:opacity-40">
                   <Printer size={15} /> Print
                 </button>
               </div>
 
-              {/* Test scan link */}
               <div className="mt-3 text-center">
                 <a href={preview.encodedUrl} target="_blank" rel="noopener noreferrer"
                   className="text-[12px] text-brand-600 hover:text-brand-700 underline underline-offset-2 flex items-center justify-center gap-1">
@@ -413,28 +445,47 @@ export default function AdminQRPage() {
 
       {/* ── Add Table Modal ── */}
       {showNewForm && (
-        <div className="fixed inset-0 bg-ink-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-6"
-          onClick={e => e.target === e.currentTarget && setShowNewForm(false)}>
+        <div
+          className="fixed inset-0 bg-ink-900/30 backdrop-blur-sm flex items-center justify-center z-50 p-6"
+          onClick={e => e.target === e.currentTarget && setShowNewForm(false)}
+        >
           <div className="bg-white border border-ink-100 rounded-3xl w-[380px] p-6 shadow-card-lg">
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-serif text-[18px] text-ink-900 font-semibold">Add New Table</h2>
-              <button onClick={() => setShowNewForm(false)} className="w-8 h-8 rounded-xl bg-ink-50 border border-ink-200 flex items-center justify-center">
+              <button onClick={() => setShowNewForm(false)}
+                className="w-8 h-8 rounded-xl bg-ink-50 border border-ink-200 flex items-center justify-center">
                 <X size={14} className="text-ink-500" />
               </button>
             </div>
 
             <div className="mb-4">
-              <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">Table Number</label>
-              <input value={newTable.number} onChange={e => setNewTable(p => ({ ...p, number: e.target.value }))}
-                placeholder="e.g. 13" type="number" min="1" max="99" className="w-full h-10 text-[13px]" />
+              <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">
+                Table Number
+              </label>
+              <input
+                value={newTable.number}
+                onChange={e => setNewTable(p => ({ ...p, number: e.target.value }))}
+                placeholder="e.g. 13"
+                type="number"
+                min="1"
+                max="99"
+                className="w-full h-10 text-[13px]"
+              />
             </div>
 
             <div className="mb-4">
-              <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">Zone</label>
+              <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">
+                Zone
+              </label>
               <div className="flex gap-2 flex-wrap">
                 {['Main Hall', 'Garden Terrace', 'Private Dining', 'Lounge Bar'].map(z => (
-                  <button key={z} onClick={() => setNewTable(p => ({ ...p, zone: z, outlet: z }))}
-                    className={`px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-all ${newTable.zone === z ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-ink-200 text-ink-500'}`}>
+                  <button key={z}
+                    onClick={() => setNewTable(p => ({ ...p, zone: z, outlet: z }))}
+                    className={`px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-all ${
+                      newTable.zone === z
+                        ? 'bg-brand-500 border-brand-500 text-white'
+                        : 'bg-white border-ink-200 text-ink-500'
+                    }`}>
                     {z}
                   </button>
                 ))}
@@ -444,13 +495,20 @@ export default function AdminQRPage() {
             <div className="bg-brand-50 border border-brand-100 rounded-xl p-3 mb-5">
               <p className="text-[11px] text-brand-700 font-semibold mb-1">QR will encode:</p>
               <p className="text-[10px] text-brand-600 font-mono-dm break-all">
-                {`${typeof window !== 'undefined' ? window.location.origin : '…'}/guest?rid=${RESTAURANT_ID.slice(0,8)}…&tid=T${(newTable.number || '??').padStart(2,'0')}`}
+                {typeof window !== 'undefined' ? window.location.origin : '…'}
+                {`/guest?rid=${RESTAURANT_ID.slice(0, 8)}…&tid=T${(newTable.number || '??').padStart(2, '0')}`}
               </p>
             </div>
 
             <div className="flex gap-2">
-              <button onClick={() => setShowNewForm(false)} className="flex-1 h-10 rounded-xl bg-ink-50 border border-ink-200 text-[13px] font-semibold text-ink-500 hover:bg-ink-100 transition-colors">Cancel</button>
-              <button onClick={addTable} disabled={!newTable.number.trim()}
+              <button
+                onClick={() => setShowNewForm(false)}
+                className="flex-1 h-10 rounded-xl bg-ink-50 border border-ink-200 text-[13px] font-semibold text-ink-500 hover:bg-ink-100 transition-colors">
+                Cancel
+              </button>
+              <button
+                onClick={addTable}
+                disabled={!newTable.number.trim()}
                 className="flex-[2] h-10 rounded-xl bg-brand-500 text-white text-[13px] font-semibold hover:bg-brand-600 transition-colors shadow-brand disabled:opacity-40 flex items-center justify-center gap-2">
                 <Plus size={15} /> Create & Generate QR
               </button>
