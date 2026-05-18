@@ -152,3 +152,27 @@ export interface QrGenerateRequest {
   outlet:       string;
   baseUrl:      string;   // e.g. https://digital-menu-amber.vercel.app
 }
+// ── QR Module ─────────────────────────────────────────────────────────────────
+export interface QrRecord {
+  id:           string;
+  restaurantId: string;
+  tableId:      string;
+  tableNumber:  string;
+  zone:         string;
+  outlet:       string;
+  encodedUrl:   string;
+  s3Key:        string;
+  s3Url:        string;
+  createdAt:    string;
+  linked:       boolean;
+  qrDataUrl?:   string;
+}
+
+export interface QrGenerateRequest {
+  restaurantId: string;
+  tableId:      string;
+  tableNumber:  string;
+  zone:         string;
+  outlet:       string;
+  baseUrl:      string;
+}
