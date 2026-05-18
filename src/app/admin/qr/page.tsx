@@ -24,8 +24,8 @@ interface QrRecord {
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
-const RESTAURANT_ID = '2687382e-3b00-4f57-9014-f484df89e3fe';
-const DEFAULT_BASE  = 'https://digital-menu-amber.vercel.app';
+const RESTAURANT_ID = '872f6f3a-82f2-41f0-a246-ec008b09666c';
+const DEFAULT_BASE  = 'https://digital-menu-lovat-five.vercel.app/';
 const ZONES = ['All Zones', 'Main Hall', 'Garden Terrace', 'Private Dining'];
 
 type GenState = 'idle' | 'generating' | 'done' | 'error';

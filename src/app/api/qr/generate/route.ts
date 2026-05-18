@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     const baseUrl =
       process.env.NEXT_PUBLIC_BASE_URL ??
       req.headers.get('origin') ??
-      'https://digital-menu-amber.vercel.app';
+      'https://digital-menu-lovat-five.vercel.app';
 
     const encodedUrl = buildQrUrl(baseUrl, restaurantId, tableId);
     const s3Key      = buildS3Key(restaurantId, tableId);
