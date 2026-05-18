@@ -201,7 +201,7 @@ export default function AdminQRPage() {
     total:     records.length,
     linked:    records.filter(r => r.linked).length,
     generated: records.filter(r => r.qrDataUrl).length,
-    zones:     [...new Set(records.map(r => r.zone))].length,
+    zones:     new Set(records.map(r => r.zone)).size,
   };
 
   return (
