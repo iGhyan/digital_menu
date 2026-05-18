@@ -127,3 +127,28 @@ export interface QrTable {
   linked: boolean;
   url: string;
 }
+
+// ── QR Module ─────────────────────────────────────────────────────────────────
+export interface QrRecord {
+  id:           string;   // uuid
+  restaurantId: string;
+  tableId:      string;   // e.g. "T07"
+  tableNumber:  string;   // display "07"
+  zone:         string;
+  outlet:       string;
+  encodedUrl:   string;   // the URL encoded in the QR
+  s3Key:        string;   // simulated S3 key
+  s3Url:        string;   // simulated presigned S3 URL
+  createdAt:    string;
+  linked:       boolean;
+  qrDataUrl?:   string;   // base64 PNG generated in browser
+}
+
+export interface QrGenerateRequest {
+  restaurantId: string;
+  tableId:      string;
+  tableNumber:  string;
+  zone:         string;
+  outlet:       string;
+  baseUrl:      string;   // e.g. https://digital-menu-amber.vercel.app
+}
