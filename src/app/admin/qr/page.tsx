@@ -84,11 +84,11 @@ export default function AdminQRPage() {
                   ))}
                 </div>
                 <svg width="50" height="50" viewBox="0 0 50 50" fill="none">
-                  <rect x="3" y="3" width="16" height="16" rx="2" fill="#0f0d0a"/>
+                  <rect x="3" y="3" width="16" height="16" rx="2" fill="#ffffff"/>
                   <rect x="6" y="6" width="10" height="10" rx="1" fill="#555"/>
-                  <rect x="31" y="3" width="16" height="16" rx="2" fill="#0f0d0a"/>
+                  <rect x="31" y="3" width="16" height="16" rx="2" fill="#ffffff"/>
                   <rect x="34" y="6" width="10" height="10" rx="1" fill="#555"/>
-                  <rect x="3" y="31" width="16" height="16" rx="2" fill="#0f0d0a"/>
+                  <rect x="3" y="31" width="16" height="16" rx="2" fill="#ffffff"/>
                   <rect x="6" y="34" width="10" height="10" rx="1" fill="#555"/>
                   <rect x="23" y="3" width="4" height="4" rx="1" fill="#666"/>
                   <rect x="23" y="23" width="4" height="4" rx="1" fill="#666"/>
@@ -149,11 +149,11 @@ export default function AdminQRPage() {
                   }`} />
                 ))}
                 <svg width="130" height="130" viewBox="0 0 130 130" fill="none">
-                  <rect x="8" y="8" width="40" height="40" rx="5" fill="#0f0d0a"/>
+                  <rect x="8" y="8" width="40" height="40" rx="5" fill="#ffffff"/>
                   <rect x="16" y="16" width="24" height="24" rx="3" fill="#444"/>
-                  <rect x="82" y="8" width="40" height="40" rx="5" fill="#0f0d0a"/>
+                  <rect x="82" y="8" width="40" height="40" rx="5" fill="#ffffff"/>
                   <rect x="90" y="16" width="24" height="24" rx="3" fill="#444"/>
-                  <rect x="8" y="82" width="40" height="40" rx="5" fill="#0f0d0a"/>
+                  <rect x="8" y="82" width="40" height="40" rx="5" fill="#ffffff"/>
                   <rect x="16" y="90" width="24" height="24" rx="3" fill="#444"/>
                   <rect x="58" y="8" width="8" height="8" rx="1" fill="#666"/>
                   <rect x="58" y="20" width="8" height="8" rx="1" fill="#666"/>

@@ -128,7 +128,7 @@ export default function ARPageClient({ restaurantId, itemId, itemName, emoji }: 
             >
               <span
                 className="text-[10px] font-medium uppercase tracking-widest"
-                style={{ color: '#d4a34e' }}
+                style={{ color: '#14b8a6' }}
               >
                 Model Ready
               </span>
@@ -225,7 +225,7 @@ export default function ARPageClient({ restaurantId, itemId, itemName, emoji }: 
             fallback={
               <div
                 className="w-full h-[400px] flex items-center justify-center gap-3 rounded-[24px] border border-white/[0.06]"
-                style={{ background: '#0f0d0a' }}
+                style={{ background: '#ffffff' }}
               >
                 <Loader2 size={20} className="animate-spin text-white/30" />
                 <span className="text-[13px] text-white/30">Initialising viewer…</span>

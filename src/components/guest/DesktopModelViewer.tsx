@@ -207,13 +207,13 @@ export default function DesktopModelViewer({ glbUrl, itemName, itemEmoji }: Desk
   };
 
   return (
-    <div className="relative w-full h-full bg-[#0f0d0a] rounded-2xl overflow-hidden">
+    <div className="relative w-full h-full bg-[#ffffff] rounded-2xl overflow-hidden">
       {/* Three.js mount point */}
       <div ref={canvasRef} className="w-full h-full" />
 
       {/* Loading overlay */}
       {loading && !error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f0d0a] gap-4">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#ffffff] gap-4">
           <div className="text-6xl animate-pulse-slow">{itemEmoji}</div>
           <div className="flex items-center gap-2">
             <div className="w-5 h-5 border-2 border-gold-400 border-t-transparent rounded-full animate-spin" />
@@ -225,7 +225,7 @@ export default function DesktopModelViewer({ glbUrl, itemName, itemEmoji }: Desk
 
       {/* Error state */}
       {error && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0f0d0a] gap-3">
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#ffffff] gap-3">
           <div className="text-5xl">{itemEmoji}</div>
           <p className="text-sm text-red-400">{error}</p>
           <p className="text-xs text-white/25">3D preview unavailable</p>

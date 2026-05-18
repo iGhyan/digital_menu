@@ -292,7 +292,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
       ctrlHint.innerHTML =
         '<div style="background:rgba(212,163,78,0.15);border:1px solid rgba(212,163,78,0.3);' +
         'border-radius:100px;padding:6px 16px;">' +
-        '<p style="color:#d4a34e;font-size:11px;">1 finger: rotate · 2 fingers: pinch to scale</p></div>';
+        '<p style="color:#14b8a6;font-size:11px;">1 finger: rotate · 2 fingers: pinch to scale</p></div>';
       domOverlayRoot.appendChild(ctrlHint);
 
       // Scale indicator
@@ -709,7 +709,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
 
         <div className="absolute left-0 right-0 flex justify-center" style={{ bottom: 210, pointerEvents: 'none' }}>
           <div className="rounded-full px-4 py-1.5" style={{ background: 'rgba(212,163,78,0.15)', border: '1px solid rgba(212,163,78,0.3)' }}>
-            <p className="text-[11px] text-center" style={{ color: '#d4a34e' }}>
+            <p className="text-[11px] text-center" style={{ color: '#14b8a6' }}>
               1 finger: rotate · 2 fingers: pinch to scale
             </p>
           </div>
@@ -739,7 +739,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     return (
       <div
         className="w-full flex flex-col items-center justify-center gap-4 rounded-[24px] py-16 px-6"
-        style={{ background: '#0f0d0a', border: '0.5px solid rgba(239,83,80,0.20)' }}
+        style={{ background: '#ffffff', border: '0.5px solid rgba(239,83,80,0.20)' }}
       >
         <AlertCircle size={36} className="text-red-400" />
         <p className="text-[14px] text-white/50 text-center max-w-[280px] leading-relaxed">{errorMsg}</p>
@@ -762,7 +762,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
     <div className="w-full flex flex-col gap-4">
       <div
         className="relative w-full rounded-[24px] overflow-hidden border border-white/[0.06]"
-        style={{ height: isMobile ? 360 : 480, background: '#0f0d0a' }}
+        style={{ height: isMobile ? 360 : 480, background: '#ffffff' }}
       >
         <canvas ref={canvasRef} className="w-full h-full" style={{ display: 'block' }} />
 
@@ -788,7 +788,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
 
         {status === 'model-ready' && (
           <div className="absolute top-4 left-4 flex items-center gap-2 rounded-full px-3 py-1.5" style={{ background: 'rgba(0,0,0,0.55)' }}>
-            {isMobile ? <Smartphone size={13} style={{ color: '#d4a34e' }} /> : <Monitor size={13} style={{ color: '#d4a34e' }} />}
+            {isMobile ? <Smartphone size={13} style={{ color: '#14b8a6' }} /> : <Monitor size={13} style={{ color: '#14b8a6' }} />}
             <span className="text-[11px] font-medium" style={{ color: 'rgba(255,255,255,0.6)' }}>
               {isMobile ? '3D Preview' : '360° View — Drag to rotate'}
             </span>
@@ -821,7 +821,7 @@ export default function ARViewer({ glbUrl, itemName = 'Menu Item', emoji = '🍽
           <button
             onClick={startAR}
             className="w-full h-14 rounded-2xl flex items-center justify-center gap-3 font-medium text-[16px] active:scale-95 transition-all"
-            style={{ background: 'linear-gradient(135deg,#d4a34e,#c4873c)', color: '#0f0d0a' }}
+            style={{ background: 'linear-gradient(135deg,#14b8a6,#c4873c)', color: '#ffffff' }}
           >
             <Smartphone size={22} />
             Launch AR View

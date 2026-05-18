@@ -345,7 +345,7 @@ tick();
         style={{
           aspectRatio: device === 'mobile' ? '9/16' : '16/9',
           maxHeight: '85dvh',
-          background: '#0f0d0a',
+          background: '#ffffff',
         }}
       >
         {/* Top bar */}
@@ -362,8 +362,8 @@ tick();
           <div className="flex items-center gap-2 rounded-full px-3 py-1.5"
             style={{ background: 'rgba(0,0,0,0.5)', border: '0.5px solid rgba(255,255,255,0.1)' }}>
             {device === 'mobile'
-              ? <Smartphone size={13} style={{ color: '#d4a34e' }} />
-              : <Monitor    size={13} style={{ color: '#d4a34e' }} />}
+              ? <Smartphone size={13} style={{ color: '#14b8a6' }} />
+              : <Monitor    size={13} style={{ color: '#14b8a6' }} />}
             <span className="text-[11px] text-white/70 font-medium">
               {device === 'mobile' ? 'WebXR AR' : '360° Viewer'}
             </span>
@@ -381,11 +381,11 @@ tick();
         {/* Loading */}
         {state === 'loading' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-10"
-            style={{ background: '#0f0d0a' }}>
+            style={{ background: '#ffffff' }}>
             <div className="text-[60px] opacity-40">🍽️</div>
             <div className="flex items-center gap-2" style={{ color: 'rgba(255,255,255,0.4)' }}>
               <div className="w-4 h-4 border-2 border-white/20 border-t-gold-400 rounded-full animate-spin"
-                style={{ borderTopColor: '#d4a34e' }} />
+                style={{ borderTopColor: '#14b8a6' }} />
               <span className="text-[13px]">Loading 3D model… {loadPct}%</span>
             </div>
             <div className="w-48 h-[3px] rounded-full overflow-hidden"
@@ -399,13 +399,13 @@ tick();
         {/* Error */}
         {state === 'error' && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 z-10 px-8 text-center"
-            style={{ background: '#0f0d0a' }}>
+            style={{ background: '#ffffff' }}>
             <AlertCircle size={36} className="text-red-400" />
             <p className="text-[14px] text-white/50 leading-relaxed">{errorMsg}</p>
             <button
               onClick={() => router.back()}
               className="px-5 py-2 rounded-xl text-[13px] font-medium"
-              style={{ background: 'rgba(212,163,78,0.15)', border: '0.5px solid rgba(212,163,78,0.3)', color: '#d4a34e' }}
+              style={{ background: 'rgba(212,163,78,0.15)', border: '0.5px solid rgba(212,163,78,0.3)', color: '#14b8a6' }}
             >
               Go Back
             </button>
@@ -461,7 +461,7 @@ tick();
                   <button
                     onClick={launchAR}
                     className="w-full h-12 rounded-xl flex items-center justify-center gap-2 font-medium text-[15px]"
-                    style={{ background: 'linear-gradient(135deg,#d4a34e,#c4873c)', color: '#0f0d0a' }}
+                    style={{ background: 'linear-gradient(135deg,#14b8a6,#c4873c)', color: '#ffffff' }}
                   >
                     <span>🔮</span> View in AR — Place on Your Table
                   </button>
@@ -480,8 +480,8 @@ tick();
                   </div>
                   <div className="flex items-center gap-1.5 rounded-full px-3 py-1.5"
                     style={{ background: 'rgba(212,163,78,0.10)', border: '0.5px solid rgba(212,163,78,0.20)' }}>
-                    <Monitor size={13} style={{ color: '#d4a34e' }} />
-                    <span className="text-[11px] font-medium" style={{ color: '#d4a34e' }}>Desktop</span>
+                    <Monitor size={13} style={{ color: '#14b8a6' }} />
+                    <span className="text-[11px] font-medium" style={{ color: '#14b8a6' }}>Desktop</span>
                   </div>
                 </div>
               )}

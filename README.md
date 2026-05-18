@@ -66,7 +66,7 @@ npm run dev
 
 ## 🎨 Design System
 
-- **Colors:** Deep charcoal (`#0f0d0a`) with warm amber/gold (`#d4a34e`) accents
+- **Colors:** Deep charcoal (`#ffffff`) with warm amber/gold (`#14b8a6`) accents
 - **Typography:** Playfair Display (serif) + DM Sans (body) + DM Mono (timers/IDs)
 - **Theme:** Premium dark luxury — restaurant fine-dining ambiance
 

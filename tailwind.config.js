@@ -14,7 +14,7 @@ module.exports = {
           100: '#f7e9c8',
           200: '#f0d49e',
           300: '#e8bc6e',
-          400: '#d4a34e',  // primary gold
+          400: '#14b8a6',  // primary gold
           500: '#c4873c',
           600: '#a86d2c',
           700: '#8a551f',
@@ -22,7 +22,7 @@ module.exports = {
           900: '#4a2a0a',
         },
         surface: {
-          DEFAULT: '#0f0d0a',
+          DEFAULT: '#ffffff',
           50:  '#1a1714',
           100: '#111114',
           200: '#0f0f11',

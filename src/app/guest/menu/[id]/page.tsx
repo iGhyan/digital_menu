@@ -61,7 +61,7 @@ export default function ItemDetailPage() {
         {/* Hero */}
         <div
           className="relative w-full h-[220px] flex items-center justify-center text-[90px]"
-          style={{ background: 'linear-gradient(160deg,#1e1208 0%,#0f0d0a 100%)' }}
+          style={{ background: 'linear-gradient(160deg,#1e1208 0%,#ffffff 100%)' }}
         >
           <div
             className="absolute inset-0 pointer-events-none"
