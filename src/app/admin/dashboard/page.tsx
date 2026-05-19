@@ -128,14 +128,12 @@ export default function AdminDashboardPage() {
     },
   ];
 
-  // Show most recent 10 orders sorted by placedAt desc
   const recentOrders = [...orders]
     .sort((a, b) => new Date(b.placedAt ?? 0).getTime() - new Date(a.placedAt ?? 0).getTime())
     .slice(0, 10);
 
   return (
     <>
-      {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-ink-100 bg-black">
         <div>
           <h1 className="font-serif text-[20px] text-ink-900 font-semibold">Dashboard</h1>
