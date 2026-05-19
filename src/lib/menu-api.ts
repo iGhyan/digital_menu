@@ -3,14 +3,7 @@
  * Typed wrappers around the AWS API Gateway menu endpoints.
  */
 
-import { MENU_API, apiFetch, RESTAURANT_ID as CONFIG_RID } from './api-config';
-
-// Runtime restaurant ID — reads env directly as fallback
-function getRestaurantId(): string {
-  return CONFIG_RID
-    || process.env.NEXT_PUBLIC_RESTAURANT_ID
-    || '';
-}
+import { MENU_API, apiFetch, RESTAURANT_ID } from './api-config';
 
 // ── API response types ─────────────────────────────────────────────────────────
 export interface ApiMenuItem {
@@ -52,10 +45,9 @@ export interface ApiMenuResponse {
 // ── GET all items ──────────────────────────────────────────────────────────────
 export async function fetchMenuItems(restaurantId?: string): Promise<ApiMenuItem[]> {
   try {
-    const rid = restaurantId || getRestaurantId();
-    if (!rid) {
-      throw new Error('Restaurant ID is missing. Set NEXT_PUBLIC_RESTAURANT_ID in env or pass rid param.');
-    }
+    // Priority: passed param → env/config (RESTAURANT_ID already has fallback in api-config.ts)
+    const rid = (restaurantId && restaurantId.trim()) ? restaurantId.trim() : RESTAURANT_ID;
+    console.log('[Menu API] fetchMenuItems rid:', rid);
     const data = await apiFetch<ApiMenuResponse | ApiMenuItem[]>(MENU_API.items(rid));
     // Handle both { items: [...] } and [...] response shapes
     let items: any[] = [];
@@ -77,7 +69,7 @@ export async function fetchMenuItems(restaurantId?: string): Promise<ApiMenuItem
 
 // ── GET item by ID ─────────────────────────────────────────────────────────────
 export async function fetchMenuItem(itemId: string, restaurantId?: string): Promise<ApiMenuItem> {
-  const rid = restaurantId || getRestaurantId();
+  const rid = (restaurantId && restaurantId.trim()) ? restaurantId.trim() : RESTAURANT_ID;
   return apiFetch<ApiMenuItem>(MENU_API.item(itemId, rid));
 }
 
