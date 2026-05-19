@@ -1,11 +1,23 @@
 'use client';
 
-import { useEffect, useState, Suspense, lazy } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, Eye, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Cuboid, Loader2, AlertCircle } from 'lucide-react';
+import dynamic from 'next/dynamic';
+import { fetchArModel } from '@/lib/ar-api';
 
-// Use React lazy instead of Next.js dynamic to avoid SSR issues on mobile
-const ARViewer = lazy(() => import('@/components/guest/ARViewer'));
+const ARViewer = dynamic(
+  () => import('@/components/guest/ARViewer'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[400px] flex items-center justify-center gap-3 bg-ink-50 rounded-3xl border border-ink-100">
+        <Loader2 size={20} className="animate-spin text-brand-400" />
+        <span className="text-[13px] text-ink-400">Loading AR viewer…</span>
+      </div>
+    ),
+  },
+);
 
 interface Props {
   restaurantId: string;
@@ -14,249 +26,118 @@ interface Props {
   emoji:        string;
 }
 
+// Fallback IDs — used only when URL params are missing
+const FALLBACK_RID = '2687382e-3b00-4f57-9014-f484df89e3fe';
+const FALLBACK_IID = 'e83ea14d-24ce-4ce9-9d24-5899143231f4';
+
 export default function ARPageClient({ restaurantId, itemId, itemName, emoji }: Props) {
   const router = useRouter();
 
-  const [glbUrl,   setGlbUrl]   = useState<string | null>(null);
-  const [error,    setError]    = useState<string | null>(null);
-  const [fetching, setFetching] = useState(true);
-  const [debugMsg, setDebugMsg] = useState<string[]>([]);
+  // Use props if valid, otherwise fall back to demo IDs
+  const rid = restaurantId?.trim() || FALLBACK_RID;
+  const iid = itemId?.trim()       || FALLBACK_IID;
 
-  const log = (msg: string) => {
-    console.log('[ARPage]', msg);
-    setDebugMsg(p => [...p.slice(-5), msg]);
-  };
+  const [glbUrl,  setGlbUrl]  = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error,   setError]   = useState<string | null>(null);
 
   useEffect(() => {
-    let cancelled = false;
+    console.log('[AR] restaurantId:', rid, 'itemId:', iid);
 
-    (async () => {
-      try {
-        const origin = window.location.origin;
-        const url    = `${origin}/api/ar?rid=${encodeURIComponent(restaurantId)}&iid=${encodeURIComponent(itemId)}`;
-
-        log(`Fetching: ${url}`);
-
-        const controller = new AbortController();
-        const timeout    = setTimeout(() => controller.abort(), 15000);
-
-        const res = await fetch(url, {
-          cache:  'no-store',
-          signal: controller.signal,
-        });
-
-        clearTimeout(timeout);
-        log(`Response: ${res.status}`);
-
-        if (!res.ok) {
-          const body = await res.text().catch(() => '');
-          throw new Error(`HTTP ${res.status}: ${body}`);
-        }
-
-        const data = await res.json();
-        log(`Got presignedUrl: ${data.presignedUrl ? 'YES' : 'NO'}`);
-
-        if (!data.presignedUrl) throw new Error('No presignedUrl in response');
-
-        if (!cancelled) setGlbUrl(data.presignedUrl);
-      } catch (err: any) {
-        const msg = err?.name === 'AbortError'
-          ? 'Request timed out after 15s — check network'
-          : err?.message ?? 'Unknown error';
-        log(`Error: ${msg}`);
-        if (!cancelled) setError(msg);
-      } finally {
-        if (!cancelled) setFetching(false);
-      }
-    })();
-
-    return () => { cancelled = true; };
-  }, [restaurantId, itemId]);
+    fetchArModel(rid, iid)
+      .then(d => {
+        console.log('[AR] presignedUrl received:', d.presignedUrl?.slice(0, 60));
+        setGlbUrl(d.presignedUrl);
+        setLoading(false);
+      })
+      .catch(e => {
+        const msg = e?.message ?? 'Failed to load model';
+        console.error('[AR] error:', msg);
+        // Friendly message for item_not_found
+        setError(
+          msg.includes('item_not_found') || msg.includes('404')
+            ? 'No 3D model available for this item yet.'
+            : msg,
+        );
+        setLoading(false);
+      });
+  }, [rid, iid]);
 
   return (
-    <main
-      className="min-h-dvh flex flex-col items-center p-4 md:p-8"
-      style={{ background: '#0c0c0e' }}
-    >
-      {/* Background glow */}
-      <div
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          background:
-            'radial-gradient(ellipse 60% 40% at 50% 0%, rgba(212,163,78,0.10) 0%, transparent 70%)',
-        }}
-      />
+    <main className="min-h-dvh bg-slate-50 flex flex-col items-center py-6 px-4">
+      <div className="phone-shell">
+        <div className="flex justify-between px-5 pt-4 text-xs text-ink-400">
+          <span>9:44</span><span>●●●</span>
+        </div>
 
-      <div className="w-full relative z-10">
-
-        {/* Top nav */}
-        <div className="flex items-center gap-3 mb-6">
-          <button
-            onClick={() => router.back()}
-            className="w-10 h-10 rounded-xl border border-white/[0.08] flex items-center justify-center hover:bg-white/[0.07] transition-colors flex-shrink-0"
-            style={{ background: 'rgba(255,255,255,0.04)' }}
-          >
-            <ArrowLeft size={18} className="text-white/60" />
+        {/* Nav */}
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-ink-100">
+          <button onClick={() => router.back()}
+            className="w-9 h-9 rounded-xl bg-ink-50 border border-ink-200 flex items-center justify-center">
+            <ArrowLeft size={16} className="text-ink-600" />
           </button>
-
-          <div className="flex-1 min-w-0">
-            <h1 className="font-serif text-[20px] text-[#f5e9d0] font-semibold leading-tight truncate">
-              {itemName}
-            </h1>
-            <p className="text-[11px] text-white/30 mt-0.5 flex items-center gap-1.5">
-              <Eye size={11} /> AR &amp; 3D Preview
-            </p>
+          <div className="flex-1">
+            <h1 className="font-serif text-[18px] text-ink-900 font-semibold">{itemName}</h1>
+            <p className="text-[11px] text-ink-400">AR & 3D Preview</p>
           </div>
-
-          {/* Status badge */}
-          {fetching && (
-            <div
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 border border-white/[0.07] flex-shrink-0"
-              style={{ background: 'rgba(255,255,255,0.03)' }}
-            >
-              <Loader2 size={11} className="animate-spin text-white/30" />
-              <span className="text-[10px] text-white/30 uppercase tracking-widest">Loading</span>
-            </div>
-          )}
-          {!fetching && glbUrl && (
-            <div
-              className="flex items-center gap-1.5 rounded-full px-3 py-1.5 flex-shrink-0"
-              style={{
-                background: 'rgba(212,163,78,0.10)',
-                border: '0.5px solid rgba(212,163,78,0.25)',
-              }}
-            >
-              <span
-                className="text-[10px] font-medium uppercase tracking-widest"
-                style={{ color: '#14b8a6' }}
-              >
-                Model Ready
-              </span>
+          {!loading && !error && glbUrl && (
+            <div className="bg-brand-50 border border-brand-200 rounded-full px-3 py-1.5 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-blink" />
+              <span className="text-[10px] text-brand-700 font-semibold uppercase tracking-widest">Model Ready</span>
             </div>
           )}
         </div>
 
-        {/* API info card */}
-        <div
-          className="rounded-2xl p-4 mb-4 flex items-start gap-3 border border-white/[0.06]"
-          style={{ background: '#111114' }}
-        >
-          <div className="text-[28px] flex-shrink-0 mt-0.5">{emoji}</div>
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-medium text-[#f5e9d0] mb-1">{itemName}</p>
-            <p className="text-[11px] text-white/25 break-all leading-relaxed">
-              <span className="text-white/40">Item ID: </span>{itemId}
-            </p>
-            <p className="text-[11px] text-white/25 mt-0.5">
-              <span className="text-white/40">Expires: </span>15 min · Presigned S3 GLB
-            </p>
+        {/* Item info */}
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-ink-100">
+          <div className="w-12 h-12 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-2xl">
+            {emoji}
           </div>
-          {fetching && (
-            <Loader2 size={16} className="animate-spin text-white/25 flex-shrink-0 mt-1" />
-          )}
-          {!fetching && glbUrl && (
-            <span
-              className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-green-400 text-xs"
-              style={{
-                background: 'rgba(76,175,80,0.10)',
-                border: '0.5px solid rgba(76,175,80,0.20)',
-              }}
-            >
-              ✓
-            </span>
-          )}
+          <div className="flex-1">
+            <p className="text-[13px] font-semibold text-ink-700">{itemName}</p>
+            <p className="text-[11px] text-ink-400 font-mono-dm">
+              Item: {iid.slice(0,8)}…{iid.slice(-4)}
+            </p>
+            <p className="text-[11px] text-ink-400">Expires: 15 min · Presigned S3 GLB</p>
+          </div>
+          <Cuboid size={20} className="text-brand-500" />
         </div>
 
-
-        {/* ── Loading state ── */}
-        {fetching && (
-          <div
-            className="w-full flex flex-col items-center justify-center gap-4 rounded-[24px] border border-white/[0.06] py-16"
-            style={{ background: '#111114' }}
-          >
-            <div className="text-[60px] opacity-30">{emoji}</div>
-            <div className="flex items-center gap-2 text-white/30">
-              <Loader2 size={16} className="animate-spin" />
-              <span className="text-[13px]">Fetching model URL…</span>
-            </div>
-            <div
-              className="w-48 h-[3px] rounded-full overflow-hidden"
-              style={{ background: 'rgba(255,255,255,0.06)' }}
-            >
-              <div
-                className="h-full rounded-full w-1/3 animate-pulse"
-                style={{ background: 'rgba(212,163,78,0.4)' }}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* ── Error state ── */}
-        {error && !fetching && (
-          <div
-            className="w-full flex flex-col items-center justify-center gap-4 rounded-[24px] py-16 px-6"
-            style={{
-              background: '#111114',
-              border: '0.5px solid rgba(239,83,80,0.20)',
-            }}
-          >
-            <AlertCircle size={36} className="text-red-400" />
-            <div className="text-center max-w-[300px]">
-              <p className="text-[14px] font-medium text-white/60 mb-2">
-                Failed to load AR model
-              </p>
-              <p className="text-[12px] text-white/30 leading-relaxed font-mono break-all">
-                {error}
-              </p>
-            </div>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 rounded-xl border border-white/[0.08] text-white/40 text-[13px] hover:bg-white/10 transition-colors"
-              style={{ background: 'rgba(255,255,255,0.04)' }}
-            >
-              Retry
-            </button>
-          </div>
-        )}
-
-        {/* ── AR Viewer — renders once GLB URL is ready ── */}
-        {!fetching && !error && glbUrl && (
-          <Suspense
-            fallback={
-              <div
-                className="w-full h-[400px] flex items-center justify-center gap-3 rounded-[24px] border border-white/[0.06]"
-                style={{ background: '#ffffff' }}
-              >
-                <Loader2 size={20} className="animate-spin text-white/30" />
-                <span className="text-[13px] text-white/30">Initialising viewer…</span>
+        {/* Viewer area */}
+        <div className="flex-1 px-5 py-4">
+          {loading && (
+            <div className="w-full h-[320px] flex flex-col items-center justify-center gap-3 bg-ink-50 rounded-3xl border border-ink-100">
+              <div className="text-5xl opacity-30">{emoji}</div>
+              <div className="flex items-center gap-2">
+                <Loader2 size={16} className="animate-spin text-brand-500" />
+                <span className="text-[13px] text-ink-400">Fetching 3D model…</span>
               </div>
-            }
-          >
+              <p className="text-[10px] text-ink-300 font-mono-dm">
+                /api/ar?rid={rid.slice(0,8)}…&iid={iid.slice(0,8)}…
+              </p>
+            </div>
+          )}
+
+          {error && !loading && (
+            <div className="w-full h-[280px] flex flex-col items-center justify-center gap-3 bg-red-50 rounded-3xl border border-red-200 px-6 text-center">
+              <AlertCircle size={32} className="text-red-400" />
+              <p className="text-[14px] font-semibold text-red-700">
+                {error.includes('No 3D model') ? '3D Model Coming Soon' : 'Failed to Load Model'}
+              </p>
+              <p className="text-[12px] text-red-500 leading-relaxed">{error}</p>
+              {!error.includes('No 3D model') && (
+                <button onClick={() => window.location.reload()}
+                  className="px-4 py-2 rounded-xl bg-red-100 border border-red-200 text-red-700 text-[13px] font-semibold hover:bg-red-200 transition-colors">
+                  Retry
+                </button>
+              )}
+            </div>
+          )}
+
+          {glbUrl && !loading && !error && (
             <ARViewer glbUrl={glbUrl} itemName={itemName} emoji={emoji} />
-          </Suspense>
-        )}
-
-        {/* ── Info footer ── */}
-        {!fetching && !error && glbUrl && (
-          <div className="mt-5 grid grid-cols-3 gap-3">
-            {[
-              { icon: '📱', title: 'Mobile AR',    desc: 'Place dish on real table via WebXR' },
-              { icon: '🖥️', title: 'Desktop 360°', desc: 'Drag to rotate, scroll to zoom'     },
-              { icon: '🍽️', title: 'True to size',  desc: 'Scaled to real-world dimensions'    },
-            ].map((f) => (
-              <div
-                key={f.title}
-                className="rounded-xl p-3.5 text-center border border-white/[0.06]"
-                style={{ background: '#111114' }}
-              >
-                <div className="text-[24px] mb-2">{f.icon}</div>
-                <p className="text-[12px] font-medium text-[#f5e9d0] mb-1">{f.title}</p>
-                <p className="text-[10px] text-white/25 leading-relaxed">{f.desc}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
+          )}
+        </div>
       </div>
     </main>
   );
