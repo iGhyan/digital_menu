@@ -1,8 +1,15 @@
+/**
+ * Central API configuration
+ * All values come from environment variables — no hardcoded IDs.
+ */
+
+// ── Environment variables ──────────────────────────────────────────────────────
+// Set these in .env.local (local) and Vercel dashboard (production)
 export const RESTAURANT_ID =
-  process.env.NEXT_PUBLIC_RESTAURANT_ID ?? '2687382e-3b00-4f57-9014-f484df89e3fe';
+  process.env.NEXT_PUBLIC_RESTAURANT_ID ?? '';
 
 export const TENANT_ID =
-  process.env.NEXT_PUBLIC_TENANT_ID ?? 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+  process.env.NEXT_PUBLIC_TENANT_ID ?? '';
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ??

@@ -140,7 +140,7 @@ export default function AdminDashboardPage() {
         <div>
           <h1 className="font-serif text-[20px] text-ink-900 font-semibold">Dashboard</h1>
           <p className="text-[12px] text-ink-400 mt-0.5">
-            La Maison · {new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+            Das Pardes · {new Date().toLocaleDateString('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
           </p>
         </div>
         <div className="flex items-center gap-2.5">

@@ -36,7 +36,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         <div className="flex items-center gap-2.5 p-5 border-b border-white/[0.05]">
           <span className="text-[22px]">🍽️</span>
           <div>
-            <p className="font-serif text-[17px] text-[#f5e9d0] font-semibold leading-tight">La Maison</p>
+            <p className="font-serif text-[17px] text-[#f5e9d0] font-semibold leading-tight">Das Pardes</p>
             <p className="text-[10px] text-white/20 uppercase tracking-widest">Admin Portal</p>
           </div>
         </div>

@@ -2,13 +2,13 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'La Maison — Digital Menu',
+  title: 'Das Pardes — Digital Menu',
   description: 'Fine dining experience — scan, order, track',
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'black-translucent',
-    title: 'La Maison',
+    title: 'Das Pardes',
   },
 };
 

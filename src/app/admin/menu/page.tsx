@@ -155,7 +155,7 @@ export default function AdminMenuPage() {
         <div>
           <h1 className="font-serif text-[20px] text-ink-900 font-semibold">Menu Management</h1>
           <p className="text-[12px] text-ink-400">
-            La Maison · Live API · {items.length} items loaded
+            Das Pardes · Live API · {items.length} items loaded
           </p>
         </div>
         <div className="flex items-center gap-2.5">
@@ -321,7 +321,8 @@ export default function AdminMenuPage() {
       {modal.open && (
         <div className="fixed inset-0 bg-ink-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-6"
           onClick={e => e.target === e.currentTarget && setModal({ open: false })}>
-          <div className="bg-black border border-ink-100 rounded-3xl w-[440px] max-h-[90vh] overflow-y-auto p-6 shadow-card-lg">
+          <div className="bg-black
+           border border-ink-100 rounded-3xl w-[440px] max-h-[90vh] overflow-y-auto p-6 shadow-card-lg">
 
             <div className="flex items-center justify-between mb-5">
               <div>

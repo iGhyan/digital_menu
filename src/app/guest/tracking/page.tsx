@@ -96,7 +96,7 @@ export default function TrackingPage() {
   const stageIdx = STATUS_INDEX[status];
 
   return (
-    <main className="min-h-dvh bg-surface flex flex-col items-center p-6">
+    <main className="min-h-dvh bg-surface flex flex-col items-center">
       <div className="phone-shell relative">
 
         {/* Toast */}
@@ -113,10 +113,6 @@ export default function TrackingPage() {
           </div>
         )}
 
-        {/* Status bar */}
-        <div className="flex justify-between px-5 pt-3.5 text-xs text-white/35 font-mono-dm">
-          <span>{clock || '9:48'}</span><span>●●●</span>
-        </div>
 
         {/* Top nav */}
         <div className="flex items-center gap-3 px-5 py-3.5">

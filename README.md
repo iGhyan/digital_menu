@@ -1,4 +1,4 @@
-# 🍽️ La Maison — Restaurant Digital Menu System
+# 🍽️ Das Pardes — Restaurant Digital Menu System
 
 A full-stack restaurant PWA built with **Next.js 14**, **TypeScript**, and **Tailwind CSS**.
 
