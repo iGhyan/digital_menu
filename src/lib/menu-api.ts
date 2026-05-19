@@ -12,6 +12,7 @@ export interface ApiMenuItem {
   description: string;
   price:       number;
   category:    string;
+  categoryId?: string;
   status:      'active' | 'inactive' | 'draft';
   imageUrl?:   string;
   emoji?:      string;
@@ -132,4 +133,25 @@ export function normaliseItem(raw: any): ApiMenuItem {
     description: raw.description ?? raw.desc     ?? '',
     category:    raw.category    ?? raw.categoryId ?? 'other',
   };
+}
+
+// ── GET categories ─────────────────────────────────────────────────────────────
+export interface ApiCategory {
+  id:   string;  // UUID
+  name: string;
+  slug?: string;
+}
+
+export async function fetchCategories(): Promise<ApiCategory[]> {
+  try {
+    const { API_BASE, RESTAURANT_ID, apiFetch } = await import('./api-config');
+    const url = `${API_BASE}/menus/restaurants/${RESTAURANT_ID}/categories`;
+    const data = await apiFetch<ApiCategory[] | { categories: ApiCategory[] }>(url);
+    if (Array.isArray(data)) return data;
+    if ('categories' in data) return data.categories;
+    return [];
+  } catch (err) {
+    console.error('[Menu API] fetchCategories error:', err);
+    return [];
+  }
 }
