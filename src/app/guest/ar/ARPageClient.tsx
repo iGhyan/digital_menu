@@ -35,14 +35,27 @@ export default function ARPageClient({ restaurantId, itemId, itemName, emoji, pr
   const [noModel, setNoModel] = useState(false);
 
   useEffect(() => {
-    // If IDs are missing — show error immediately, no API call
-    if (!restaurantId || !itemId) {
+    // ── Use preloaded URL from menu API response (fastest path) ────────────
+    if (preloadedGlbUrl?.trim()) {
+      setGlbUrl(preloadedGlbUrl.trim());
+      setLoading(false);
+      return;
+    }
+
+    // ── Need iid to call AR API ────────────────────────────────────────────
+    if (!itemId?.trim()) {
       setError('No item selected. Please open AR from a menu item.');
       setLoading(false);
       return;
     }
 
-    fetchArModel(restaurantId, itemId)
+    // ── Resolve rid: URL param → sessionStorage → env var ─────────────────
+    const rid = restaurantId?.trim()
+      || (typeof window !== 'undefined' ? sessionStorage.getItem('lm_rid') || '' : '')
+      || process.env.NEXT_PUBLIC_RESTAURANT_ID
+      || '2687382e-3b00-4f57-9014-f484df89e3fe';
+
+    fetchArModel(rid, itemId.trim())
       .then(d => {
         setGlbUrl(d.presignedUrl);
         setLoading(false);
@@ -50,14 +63,13 @@ export default function ARPageClient({ restaurantId, itemId, itemName, emoji, pr
       .catch(e => {
         const msg: string = e?.message ?? '';
         setLoading(false);
-        // item_not_found = no 3D model uploaded yet — not an error, just unavailable
         if (msg.includes('item_not_found') || msg.includes('404')) {
           setNoModel(true);
         } else {
           setError(msg || 'Failed to load 3D model.');
         }
       });
-  }, [restaurantId, itemId]);
+  }, [restaurantId, itemId, preloadedGlbUrl]);
 
   return (
     <main className="min-h-dvh bg-slate-50 flex flex-col items-center py-6 px-4">
