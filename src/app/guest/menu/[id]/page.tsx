@@ -38,7 +38,8 @@ export default function ItemDetailPage() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    fetchMenuItem(id)
+    const rid = sessionStorage.getItem('lm_rid') || process.env.NEXT_PUBLIC_RESTAURANT_ID || '';
+    fetchMenuItem(id, rid)
       .then(raw => {
         const normalised = normaliseItem(raw);
         setItem(normalised);
@@ -66,7 +67,6 @@ export default function ItemDetailPage() {
         setLoading(false);
       });
   }, [id]);
-
 
   if (loading) return (
     <main className="min-h-dvh flex items-center justify-center bg-slate-50">
@@ -110,8 +110,10 @@ export default function ItemDetailPage() {
   };
 
   return (
-    <main className="min-h-dvh bg-slate-50 flex flex-col items-center">
+    <main className="min-h-dvh bg-slate-50 flex flex-col items-center py-6 px-4">
       <div className="phone-shell">
+        <div className="flex justify-between px-5 pt-4 text-xs text-ink-400"><span>9:43</span><span>●●●</span></div>
+
         {/* Hero */}
         <div className="relative w-full h-[210px] flex items-center justify-center text-[88px] bg-gradient-to-br from-brand-50 to-teal-50">
           <span className="drop-shadow-lg">{item.emoji}</span>

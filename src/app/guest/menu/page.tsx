@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ShoppingCart, Search, Loader2, AlertCircle } from 'lucide-react';
 import { formatPrice } from '@/lib/data';
@@ -21,7 +22,8 @@ function getCategoryEmoji(cat: string): string {
   return '🍽️';
 }
 
-export default function MenuPage() {
+function MenuContent() {
+  const params = useSearchParams();
   const [items,          setItems]          = useState<ApiMenuItem[]>([]);
   const [loading,        setLoading]        = useState(true);
   const [error,          setError]          = useState('');
@@ -31,10 +33,18 @@ export default function MenuPage() {
   const { addItem, itemCount } = useCartStore();
 
   useEffect(() => {
-    fetchMenuItems()
+    // Get rid from URL param → sessionStorage → env var
+    const urlRid = params.get('rid') || '';
+    const sessionRid = typeof window !== 'undefined' ? sessionStorage.getItem('lm_rid') || '' : '';
+    const rid = urlRid || sessionRid || process.env.NEXT_PUBLIC_RESTAURANT_ID || '';
+
+    // Store in session for other pages
+    if (rid && typeof window !== 'undefined') sessionStorage.setItem('lm_rid', rid);
+
+    fetchMenuItems(rid)
       .then(raw => { setItems(raw.map(normaliseItem)); setLoading(false); })
       .catch(e => { setError(e?.message ?? 'Failed to load menu'); setLoading(false); });
-  }, []);
+  }, [params]);
 
   // Build category list from items
   const categories = [
@@ -57,14 +67,18 @@ export default function MenuPage() {
   };
 
   return (
-    <main className="min-h-dvh bg-black flex flex-col items-center ">
+    <main className="min-h-dvh bg-surface flex flex-col items-center p-6">
       <div className="phone-shell">
+
+        <div className="flex justify-between px-5 pt-3.5 text-xs text-white/35">
+          <span>9:41</span><span>●●●</span>
+        </div>
 
         {/* Top nav */}
         <div className="flex items-center justify-between px-5 py-4">
           <div>
             <p className="text-[11px] text-white/30 uppercase tracking-widest">
-              {typeof window !== 'undefined' ? `Table ${sessionStorage.getItem('lm_table') ?? '—'} · Das Pardes` : 'Das Pardes'}
+              {typeof window !== 'undefined' ? `Table ${sessionStorage.getItem('lm_table') ?? '—'} · La Maison` : 'La Maison'}
             </p>
             <h1 className="font-serif text-[22px] text-[#f5e9d0] font-semibold">Our Menu</h1>
           </div>
@@ -169,7 +183,7 @@ export default function MenuPage() {
         )}
 
         {/* Bottom nav */}
-        <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.05] bg-black">
+        <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.05] bg-surface">
           {[
             { icon: '🏠', label: 'Home',   href: '/guest' },
             { icon: '📖', label: 'Menu',   href: '/guest/menu', active: true },
@@ -185,5 +199,17 @@ export default function MenuPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function MenuPage() {
+  return (
+    <Suspense fallback={
+      <main className="min-h-dvh bg-surface flex items-center justify-center">
+        <Loader2 size={28} className="animate-spin text-gold-400" />
+      </main>
+    }>
+      <MenuContent />
+    </Suspense>
   );
 }
