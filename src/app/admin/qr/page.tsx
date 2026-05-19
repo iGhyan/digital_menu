@@ -266,21 +266,6 @@ export default function AdminQRPage() {
           ))}
         </div>
 
-        {/* URL encoding info */}
-        <div className="flex items-start gap-3 p-4 bg-brand-50 border border-brand-100 rounded-2xl mb-5">
-          <QrCode size={18} className="text-brand-600 mt-0.5 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-[13px] font-semibold text-brand-800 mb-1">QR URL Encoding Schema</p>
-            <p className="text-[12px] text-brand-700 font-mono-dm break-all">
-              {typeof window !== 'undefined' ? window.location.origin : DEFAULT_BASE}
-              {'/guest?rid=<restaurantId>&tid=<tableId>'}
-            </p>
-            <p className="text-[11px] text-brand-600 mt-1.5">
-              Scanning opens the guest PWA pre-loaded with the correct table session ·{' '}
-              S3 key: <span className="font-mono-dm">qr-codes/&#123;restaurantId&#125;/&#123;tableId&#125;.png</span>
-            </p>
-          </div>
-        </div>
 
         {/* Zone filter */}
         <div className="flex gap-2 mb-4 flex-wrap">
@@ -482,8 +467,8 @@ export default function AdminQRPage() {
             <div className="flex items-center justify-between mb-5">
               <h2 className="font-serif text-[18px] text-black font-semibold">Add New Table</h2>
               <button onClick={() => setShowNewForm(false)}
-                className="w-8 h-8 rounded-xl bg-ink-50 border border-ink-200 flex items-center justify-center">
-                <X size={14} className="text-black" />
+                className="w-8 h-8 rounded-xl bg-black border border-ink-200 flex items-center justify-center">
+                <X size={14} className="text-white" />
               </button>
             </div>
 
@@ -494,7 +479,7 @@ export default function AdminQRPage() {
               <input value={newTable.number}
                 onChange={e => setNewTable(p => ({ ...p, number: e.target.value }))}
                 placeholder="e.g. 13" type="number" min="1" max="99"
-                className="w-full h-10 text-[13px]" />
+                className="w-full h-10 text-[13px] " />
             </div>
 
             <div className="mb-4">
@@ -503,7 +488,7 @@ export default function AdminQRPage() {
                 {['Main Hall', 'Garden Terrace', 'Private Dining', 'Lounge Bar'].map(z => (
                   <button key={z} onClick={() => setNewTable(p => ({ ...p, zone: z, outlet: z }))}
                     className={`px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-all ${
-                      newTable.zone === z ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-ink-200 text-black'
+                      newTable.zone === z ? 'bg-black border-brand-500 text-white' : 'bg-white border-ink-200 text-black'
                     }`}>
                     {z}
                   </button>
@@ -512,8 +497,8 @@ export default function AdminQRPage() {
             </div>
 
             <div className="bg-brand-50 border border-brand-100 rounded-xl p-3 mb-5">
-              <p className="text-[11px] text-brand-700 font-semibold mb-1">QR will encode:</p>
-              <p className="text-[10px] text-brand-600 font-mono-dm break-all">
+              <p className="text-[11px] text-black font-semibold mb-1">QR will encode:</p>
+              <p className="text-[10px] text-black font-mono-dm break-all">
                 {typeof window !== 'undefined' ? window.location.origin : DEFAULT_BASE}
                 {`/guest?rid=${RESTAURANT_ID.slice(0, 8)}…&tid=T${(newTable.number || '??').padStart(2, '0')}`}
               </p>
@@ -521,7 +506,7 @@ export default function AdminQRPage() {
 
             <div className="flex gap-2">
               <button onClick={() => setShowNewForm(false)}
-                className="flex-1 h-10 rounded-xl bg-ink-50 border border-ink-200 text-[13px] font-semibold text-black hover:bg-ink-100 transition-colors">
+                className="flex-1 h-10 rounded-xl bg-black border border-ink-200 text-[13px] font-semibold text-white hover:bg-ink-100 transition-colors">
                 Cancel
               </button>
               <button onClick={addTable} disabled={!newTable.number.trim()}

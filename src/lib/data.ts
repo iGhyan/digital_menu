@@ -318,5 +318,7 @@ export const QR_TABLES: QrTable[] = Array.from({ length: 12 }, (_, i) => {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-export const formatPrice = (price: number) =>
-  'Rs ' + price.toLocaleString('en-PK');
+export const formatPrice = (price: number | undefined | null): string => {
+  if (price == null || isNaN(Number(price))) return 'Rs —';
+  return 'Rs ' + Number(price).toLocaleString('en-PK');
+};

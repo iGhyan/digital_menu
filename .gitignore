@@ -10,3 +10,4 @@ dist
 *.png
 *.jpg
 *.jpeg
+.env.local

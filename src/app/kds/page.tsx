@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Volume2, VolumeX, BellRing } from 'lucide-react';
-import { INITIAL_KDS_ORDERS } from '@/lib/data';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Volume2, VolumeX, BellRing, RefreshCw, Wifi, WifiOff, Radio } from 'lucide-react';
 import { formatTimer, timerColorClass, timerBarColor, playNewOrderBeep } from '@/lib/utils';
+import { fetchOrders, patchOrderStatus, normaliseOrder, toKdsStatus, WS_URL } from '@/lib/orders-api';
 import type { KdsOrder, KdsStatus } from '@/lib/types';
 
-type Filter = 'all' | 'new' | 'preparing' | 'ready' | 'delivered';
+type Filter   = 'all' | 'new' | 'preparing' | 'ready' | 'delivered';
+type WsState  = 'connecting' | 'connected' | 'disconnected' | 'error';
 
 const STATUS_NEXT: Record<KdsStatus, KdsStatus | null> = {
   new: 'preparing', preparing: 'ready', ready: 'delivered', delivered: null,
@@ -14,144 +15,264 @@ const STATUS_NEXT: Record<KdsStatus, KdsStatus | null> = {
 const STATUS_ORDER: Record<KdsStatus, number> = {
   new: 0, preparing: 1, ready: 2, delivered: 3,
 };
-const STRIP_COLOR: Record<KdsStatus, string> = {
-  new:       'bg-amber-400/70',
-  preparing: 'bg-blue-500/60',
-  ready:     'bg-green-500/70',
-  delivered: 'bg-gold-400/50',
+const STRIP: Record<KdsStatus, string> = {
+  new:       'bg-amber-400',
+  preparing: 'bg-blue-500',
+  ready:     'bg-brand-500',
+  delivered: 'bg-purple-400',
 };
-const BTN_CONFIG: Record<KdsStatus, { label: string; cls: string }[]> = {
+const BTN_CFG: Record<KdsStatus, { label: string; cls: string }[]> = {
   new:       [
-    { label: '✓ Accept',    cls: 'bg-blue-500/10 border-blue-500/25 text-blue-300 hover:bg-blue-500/20' },
-    { label: '🔥 Preparing', cls: 'bg-amber-400/10 border-amber-400/25 text-amber-300 hover:bg-amber-400/20' },
+    { label: '✓ Accept',     cls: 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'   },
+    { label: '🔥 Preparing', cls: 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' },
   ],
-  preparing: [{ label: '🔔 Mark Ready',  cls: 'bg-green-500/10 border-green-500/25 text-green-400 hover:bg-green-500/20' }],
-  ready:     [{ label: '✓ Delivered',    cls: 'bg-gold-400/12 border-gold-400/30 text-gold-400 hover:bg-gold-400/22'     }],
-  delivered: [{ label: '✓ Completed',   cls: 'bg-white/[0.03] border-white/[0.07] text-white/20 cursor-default'          }],
+  preparing: [{ label: '🔔 Mark Ready', cls: 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100' }],
+  ready:     [{ label: '✓ Delivered',   cls: 'bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100'  }],
+  delivered: [{ label: '✓ Completed',   cls: 'bg-ink-50 border-ink-200 text-ink-300 cursor-default'            }],
 };
 
-const NEW_ORDER_TEMPLATES: Pick<KdsOrder, 'items' | 'table' | 'note'>[] = [
-  {
-    table: '04', note: '',
-    items: [
-      { emoji: '🍝', name: 'Pasta Carbonara',   mods: 'Extra guanciale',    qty: 2, done: false },
-      { emoji: '🥤', name: 'Fresh Lime Soda',   mods: 'Less ice',           qty: 2, done: false },
-    ],
-  },
-  {
-    table: '06', note: 'Candle please — anniversary dinner',
-    items: [
-      { emoji: '🐟', name: 'Grilled Sea Bass',  mods: 'Lemon caper butter', qty: 1, done: false },
-      { emoji: '🍰', name: 'Tiramisu',          mods: 'Classic',            qty: 2, done: false },
-    ],
-  },
-  {
-    table: '10', note: '',
-    items: [
-      { emoji: '🦞', name: 'Lobster Thermidor', mods: 'Cognac cream sauce', qty: 2, done: false },
-    ],
-  },
-];
-
-let tplIdx = 0;
-let idCounter = 2852;
+const POLL_INTERVAL = 15000;
 
 export default function KitchenDisplayPage() {
-  const [orders, setOrders]   = useState<KdsOrder[]>(INITIAL_KDS_ORDERS);
-  const [filter, setFilter]   = useState<Filter>('all');
-  const [audio, setAudio]     = useState(true);
-  const [toast, setToast]     = useState<string | null>(null);
-  const [clock, setClock]     = useState('');
-  const [pollPct, setPollPct] = useState(0);
+  const [orders,    setOrders]    = useState<KdsOrder[]>([]);
+  const [filter,    setFilter]    = useState<Filter>('all');
+  const [audio,     setAudio]     = useState(true);
+  const [toast,     setToast]     = useState<string | null>(null);
+  const [clock,     setClock]     = useState('');
+  const [pollPct,   setPollPct]   = useState(0);
+  const [apiState,  setApiState]  = useState<'loading' | 'live' | 'error'>('loading');
+  const [apiError,  setApiError]  = useState('');
+  const [wsState,   setWsState]   = useState<WsState>('disconnected');
+  const [wsLog,     setWsLog]     = useState<string[]>([]);
+  const [advancing, setAdvancing] = useState<string | null>(null);
 
-  // Live clock
+  const pollStart  = useRef(Date.now());
+  const prevIds    = useRef<Set<string>>(new Set());
+  const wsRef      = useRef<WebSocket | null>(null);
+  const wsRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Live clock ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const tick = () => {
-      const now = new Date();
-      setClock(
-        [now.getHours(), now.getMinutes(), now.getSeconds()]
-          .map((n) => String(n).padStart(2, '0'))
-          .join(':'),
-      );
+      const n = new Date();
+      setClock([n.getHours(), n.getMinutes(), n.getSeconds()].map(x => String(x).padStart(2,'0')).join(':'));
     };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
+    tick(); const id = setInterval(tick, 1000); return () => clearInterval(id);
   }, []);
 
-  // Elapsed ticker (every second)
+  // ── Elapsed ticker ────────────────────────────────────────────────────────────
   useEffect(() => {
     const id = setInterval(() => {
-      setOrders((prev) =>
-        prev.map((o) =>
-          o.status !== 'delivered'
-            ? { ...o, elapsedSeconds: Math.min(o.elapsedSeconds + 1, o.maxSeconds + 300) }
-            : o,
-        ),
-      );
+      setOrders(prev => prev.map(o =>
+        o.status !== 'delivered'
+          ? { ...o, elapsedSeconds: Math.min(o.elapsedSeconds + 1, o.maxSeconds + 300) }
+          : o,
+      ));
     }, 1000);
     return () => clearInterval(id);
   }, []);
 
-  // Poll progress bar (10s cycle)
+  // ── Poll bar ──────────────────────────────────────────────────────────────────
   useEffect(() => {
-    const start = Date.now();
     const id = setInterval(() => {
-      const pct = ((Date.now() - start) % 10000) / 10000 * 100;
+      const pct = ((Date.now() - pollStart.current) % POLL_INTERVAL) / POLL_INTERVAL * 100;
       setPollPct(Math.min(100, pct));
-    }, 100);
+    }, 200);
     return () => clearInterval(id);
   }, []);
 
   const showToast = (msg: string) => {
-    setToast(msg);
-    setTimeout(() => setToast(null), 4000);
+    setToast(msg); setTimeout(() => setToast(null), 5000);
   };
 
-  const advanceOrder = (orderId: string) => {
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        const next = STATUS_NEXT[o.status];
-        if (!next) return o;
-        return { ...o, status: next };
-      }),
-    );
+  const addWsLog = (msg: string) => {
+    const time = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    setWsLog(prev => [`[${time}] ${msg}`, ...prev.slice(0, 9)]);
   };
 
-  const toggleDish = (orderId: string, dishIdx: number) => {
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id !== orderId) return o;
-        const items = o.items.map((it, i) =>
-          i === dishIdx ? { ...it, done: !it.done } : it,
-        );
-        return { ...o, items };
-      }),
-    );
-  };
+  // ── WebSocket connection ───────────────────────────────────────────────────────
+  const connectWs = useCallback(() => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) return;
 
-  const injectNewOrder = () => {
-    const tpl = NEW_ORDER_TEMPLATES[tplIdx % NEW_ORDER_TEMPLATES.length];
-    tplIdx++;
-    const id = `LM-${idCounter++}`;
-    const now = new Date();
-    const hh = now.getHours() % 12 || 12;
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
-    const newOrder: KdsOrder = {
-      id, table: tpl.table, zone: 'Main Hall',
-      status: 'new', elapsedSeconds: 0, maxSeconds: 1500,
-      items: tpl.items.map((it) => ({ ...it })),
-      note: tpl.note, placedAt: `${hh}:${mm} ${ampm}`,
+    setWsState('connecting');
+    addWsLog('Connecting to WebSocket…');
+
+    const ws = new WebSocket(WS_URL);
+    wsRef.current = ws;
+
+    ws.onopen = () => {
+      setWsState('connected');
+      addWsLog('✓ Connected to WebSocket');
+      // Send initial handshake
+      ws.send(JSON.stringify({ action: 'subscribe', channel: 'orders' }));
     };
-    setOrders((prev) => [newOrder, ...prev]);
-    showToast(`🔔 New order #${id} — Table ${tpl.table} · ${tpl.items.length} items`);
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        addWsLog(`← ${JSON.stringify(msg).slice(0, 80)}`);
+
+        // Handle order status update from WebSocket
+        const orderId = msg.orderId ?? msg.order_id;
+        const status  = msg.status  ?? msg.orderStatus;
+        const flags   = msg.flags;
+
+        if (orderId && (status || flags)) {
+          const kdsStatus = toKdsStatus(status ?? '', flags);
+          const shortId   = orderId.slice(0, 6).toUpperCase();
+          const displayId = `LM-${shortId}`;
+
+          setOrders(prev => {
+            const exists = prev.find(o => (o as any)._apiId === orderId || o.id === displayId);
+            if (exists) {
+              // Update existing order
+              showToast(`📡 WS: Order #${displayId} → ${kdsStatus.toUpperCase()}`);
+              return prev.map(o =>
+                ((o as any)._apiId === orderId || o.id === displayId)
+                  ? { ...o, status: kdsStatus }
+                  : o,
+              );
+            } else if (msg.lineItems || msg.items) {
+              // New order pushed via WebSocket
+              const newOrder = normaliseOrder(msg);
+              showToast(`🔔 WS: New order #${newOrder.id} — Table ${newOrder.table}`);
+              if (audio) playNewOrderBeep();
+              return [newOrder, ...prev];
+            }
+            return prev;
+          });
+        }
+      } catch {
+        addWsLog(`← (non-JSON) ${event.data?.slice(0, 60)}`);
+      }
+    };
+
+    ws.onerror = () => {
+      setWsState('error');
+      addWsLog('✗ WebSocket error');
+    };
+
+    ws.onclose = (e) => {
+      setWsState('disconnected');
+      addWsLog(`✗ Disconnected (code ${e.code})`);
+      // Auto-reconnect after 5s
+      if (wsRetryRef.current) clearTimeout(wsRetryRef.current);
+      wsRetryRef.current = setTimeout(connectWs, 5000);
+    };
+  }, [audio]);
+
+  useEffect(() => {
+    connectWs();
+    return () => {
+      if (wsRetryRef.current) clearTimeout(wsRetryRef.current);
+      wsRef.current?.close();
+    };
+  }, [connectWs]);
+
+  // ── Send message via WebSocket ─────────────────────────────────────────────────
+  const wsSend = (payload: object) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      const msg = JSON.stringify(payload);
+      wsRef.current.send(msg);
+      addWsLog(`→ ${msg.slice(0, 80)}`);
+    }
+  };
+
+  // ── Fetch orders from REST API ────────────────────────────────────────────────
+  const loadOrders = useCallback(async (silent = false) => {
+    if (!silent) setApiState('loading');
+    try {
+      const fresh = await fetchOrders();
+      const freshIds = new Set(fresh.map((o: any) => o.id));
+      const newOnes  = fresh.filter((o: any) => !prevIds.current.has(o.id));
+      if (newOnes.length > 0 && prevIds.current.size > 0) {
+        newOnes.forEach((o: any) => {
+          showToast(`🔔 New order #${o.id} — Table ${o.table}`);
+          if (audio) playNewOrderBeep();
+        });
+      }
+      prevIds.current = freshIds;
+
+      setOrders(prev => {
+        const prevMap = new Map(prev.map(o => [o.id, o]));
+        return fresh.map((o: any) => {
+          const existing = prevMap.get(o.id);
+          return existing
+            ? { ...o, elapsedSeconds: existing.elapsedSeconds, items: existing.items }
+            : o;
+        });
+      });
+      setApiState('live');
+      pollStart.current = Date.now();
+    } catch (err: any) {
+      setApiError(err?.message ?? 'Failed to fetch orders');
+      setApiState('error');
+    }
+  }, [audio]);
+
+  useEffect(() => {
+    loadOrders();
+    const id = setInterval(() => loadOrders(true), POLL_INTERVAL);
+    return () => clearInterval(id);
+  }, [loadOrders]);
+
+  // ── Advance order status ───────────────────────────────────────────────────────
+  const advanceOrder = async (orderId: string) => {
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+    const next = STATUS_NEXT[order.status];
+    if (!next) return;
+
+    setAdvancing(orderId);
+    // Optimistic update
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: next } : o));
+
+    try {
+      const apiId = (order as any)._apiId ?? orderId;
+      await patchOrderStatus(apiId, next);
+
+      // Also notify via WebSocket
+      wsSend({ action: 'orderStatusUpdate', orderId: apiId, status: next });
+      showToast(`Order #${orderId} → ${next.toUpperCase()}`);
+    } catch (err: any) {
+      // Rollback
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: order.status } : o));
+      showToast(`⚠ Failed: ${err?.message}`);
+    } finally {
+      setAdvancing(null);
+    }
+  };
+
+  // ── Toggle dish done ──────────────────────────────────────────────────────────
+  const toggleDish = (orderId: string, idx: number) => {
+    setOrders(prev => prev.map(o => {
+      if (o.id !== orderId) return o;
+      const items = o.items.map((it, i) => i === idx ? { ...it, done: !it.done } : it);
+      return { ...o, items };
+    }));
+  };
+
+  // ── Demo order (local) ────────────────────────────────────────────────────────
+  const injectDemo = () => {
+    const id = `LM-DEMO${Math.floor(Math.random()*900+100)}`;
+    const demo: KdsOrder = {
+      id, table: String(Math.floor(Math.random()*12+1)).padStart(2,'0'),
+      zone: 'Main Hall', status: 'new', elapsedSeconds: 0, maxSeconds: 1500,
+      items: [
+        { emoji:'🍝', name:'Pasta Carbonara', mods:'Extra cheese', qty:1, done:false },
+        { emoji:'🥤', name:'Lemon Soda',      mods:'No ice',       qty:2, done:false },
+      ],
+      note: '', placedAt: new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}),
+    };
+    setOrders(prev => [demo, ...prev]);
+    showToast(`🔔 Demo order #${id} — Table ${demo.table}`);
     if (audio) playNewOrderBeep();
+    // Also send via WebSocket
+    wsSend({ action: 'newOrder', orderId: id, status: 'new' });
   };
 
   const filtered = orders
-    .filter((o) => {
+    .filter(o => {
       if (filter === 'all')       return o.status !== 'delivered';
       if (filter === 'delivered') return o.status === 'delivered';
       return o.status === filter;
@@ -159,205 +280,238 @@ export default function KitchenDisplayPage() {
     .sort((a, b) => STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || b.elapsedSeconds - a.elapsedSeconds);
 
   const counts = {
-    pending:   orders.filter((o) => o.status === 'new').length,
-    preparing: orders.filter((o) => o.status === 'preparing').length,
-    ready:     orders.filter((o) => o.status === 'ready').length,
+    pending:   orders.filter(o => o.status === 'new').length,
+    preparing: orders.filter(o => o.status === 'preparing').length,
+    ready:     orders.filter(o => o.status === 'ready').length,
   };
 
+  const wsColor = wsState === 'connected' ? 'bg-green-50 border-green-200' :
+                  wsState === 'connecting' ? 'bg-amber-50 border-amber-200' :
+                  'bg-red-50 border-red-200';
+  const wsTextColor = wsState === 'connected' ? 'text-green-700' :
+                      wsState === 'connecting' ? 'text-amber-700' : 'text-red-600';
+
   return (
-    <div className="min-h-dvh bg-surface-500 flex flex-col font-sans">
+    <div className="min-h-dvh bg-black flex flex-col font-sans">
 
       {/* Toast */}
       {toast && (
-        <div className="fixed top-[76px] right-6 z-50 bg-[#1a1510] border border-amber-400/40 rounded-2xl px-4 py-3 flex items-center gap-3 shadow-card max-w-[300px] animate-[slideIn_0.3s_ease]">
-          <div className="w-9 h-9 rounded-[10px] bg-amber-400/15 flex items-center justify-center text-lg flex-shrink-0">🔔</div>
-          <p className="text-[13px] text-[#f5e9d0]">{toast}</p>
+        <div className="fixed top-20 right-5 z-50 bg-black border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-3 shadow-card-lg max-w-[320px] animate-fade-up">
+          <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-base flex-shrink-0">🔔</div>
+          <p className="text-[13px] font-semibold text-ink-800">{toast}</p>
         </div>
       )}
 
       {/* Top bar */}
-      <header className="flex items-center justify-between px-6 py-3.5 bg-surface-200 border-b border-white/[0.06]">
+      <header className="flex items-center justify-between px-6 py-3.5 bg-black border-b border-ink-100 shadow-card">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-[10px] bg-gold-400/12 border border-gold-400/30 flex items-center justify-center text-[18px]">🍽️</div>
+          <div className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center text-white text-base shadow-brand">🍽️</div>
           <div>
-            <p className="font-serif text-[18px] text-[#f5e9d0] font-semibold leading-tight">La Maison · KDS</p>
-            <p className="text-[10px] text-white/20 uppercase tracking-widest">Kitchen Display System</p>
+            <p className="font-serif text-[17px] text-ink-900 font-semibold">Das Perdas · KDS</p>
+            <p className="text-[10px] text-ink-400 uppercase tracking-widest font-semibold">Kitchen Display System</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <div className="text-center">
-            <p className="font-mono-dm text-[22px] text-[#f5e9d0] font-medium leading-tight">{clock || '09:54:22'}</p>
-            <p className="text-[10px] text-white/25">Friday, 15 May 2026</p>
+            <p className="font-mono-dm text-[20px] text-ink-900 font-semibold">{clock || '00:00:00'}</p>
+            <p className="text-[10px] text-ink-400">
+              {new Date().toLocaleDateString('en-US',{weekday:'short',day:'numeric',month:'short'})}
+            </p>
           </div>
-          <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/25 rounded-full px-3 py-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-blink" />
-            <span className="text-[10px] text-green-400 font-medium uppercase tracking-widest">WebSocket Live</span>
+
+          {/* API status */}
+          <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 border ${
+            apiState === 'live'   ? 'bg-green-50 border-green-200' :
+            apiState === 'error'  ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
+          }`}>
+            {apiState === 'live'
+              ? <><Wifi size={11} className="text-green-600" /><span className="text-[10px] text-green-700 font-semibold uppercase tracking-widest">REST Live</span></>
+              : apiState === 'error'
+              ? <><WifiOff size={11} className="text-red-500" /><span className="text-[10px] text-red-600 font-semibold">API Error</span></>
+              : <><RefreshCw size={11} className="text-amber-600 animate-spin" /><span className="text-[10px] text-amber-700 font-semibold">Loading…</span></>
+            }
+          </div>
+
+          {/* WebSocket status */}
+          <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 border ${wsColor}`}>
+            <Radio size={11} className={wsTextColor} />
+            <span className={`text-[10px] font-semibold uppercase tracking-widest ${wsTextColor}`}>
+              WS {wsState === 'connected' ? 'Live' : wsState === 'connecting' ? '…' : 'Off'}
+            </span>
+            {wsState === 'connected' && <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-blink" />}
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
           {[
-            { val: counts.pending,   label: 'Pending',   cls: 'text-amber-400' },
-            { val: counts.preparing, label: 'Preparing', cls: 'text-blue-300' },
-            { val: counts.ready,     label: 'Ready',     cls: 'text-green-400' },
-          ].map((s) => (
-            <div key={s.label} className="flex flex-col items-center px-3.5 py-1.5 rounded-[10px] border border-white/[0.07] bg-white/[0.03]">
-              <span className={`text-[18px] font-medium font-serif ${s.cls}`}>{s.val}</span>
-              <span className="text-[9px] text-white/25 uppercase tracking-widest">{s.label}</span>
+            { val: counts.pending,   label: 'Pending',   cls: 'text-amber-600' },
+            { val: counts.preparing, label: 'Preparing', cls: 'text-blue-600'  },
+            { val: counts.ready,     label: 'Ready',     cls: 'text-brand-600' },
+          ].map(s => (
+            <div key={s.label} className="flex flex-col items-center px-3.5 py-1.5 rounded-xl border border-ink-100 bg-black
+             shadow-card">
+              <span className={`text-[18px] font-bold font-serif ${s.cls}`}>{s.val}</span>
+              <span className="text-[9px] text-ink-400 uppercase tracking-widest font-semibold">{s.label}</span>
             </div>
           ))}
-          <button
-            onClick={() => setAudio(!audio)}
-            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] border text-[12px] transition-all ${
-              audio
-                ? 'bg-gold-400/[0.08] border-gold-400/25 text-gold-400'
-                : 'bg-red-500/[0.07] border-red-500/20 text-red-400'
-            }`}
-          >
-            {audio ? <Volume2 size={15} /> : <VolumeX size={15} />}
-            Audio {audio ? 'On' : 'Off'}
+          <button onClick={() => setAudio(!audio)}
+            className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl border text-[12px] font-semibold transition-all ${
+              audio ? 'bg-black border-brand-200 text-brand-700' : 'bg-red-50 border-red-200 text-red-600'
+            }`}>
+            {audio ? <Volume2 size={14} /> : <VolumeX size={14} />} Audio {audio ? 'On' : 'Off'}
           </button>
         </div>
       </header>
 
+      {/* Error banner */}
+      {apiState === 'error' && (
+        <div className="flex items-center gap-3 px-6 py-2.5 bg-red-50 border-b border-red-200">
+          <WifiOff size={14} className="text-red-500 flex-shrink-0" />
+          <p className="text-[12px] text-red-600 flex-1">{apiError}</p>
+          <button onClick={() => loadOrders()}
+            className="px-3 py-1 rounded-lg bg-red-100 border border-red-200 text-red-700 text-[12px] font-semibold hover:bg-red-200 transition-colors">
+            Retry
+          </button>
+        </div>
+      )}
+
       {/* Filter bar */}
-      <div className="flex items-center gap-2 px-6 py-3 border-b border-white/[0.04] bg-surface-300">
+      <div className="flex items-center gap-2 px-6 py-3 bg-black border-b border-ink-100">
         {([
-          { key: 'all',       label: 'All Orders', active: 'bg-white/[0.07] border-white/15 text-[#f5e9d0]' },
-          { key: 'new',       label: '🟠 New',      active: 'bg-amber-400/10 border-amber-400/30 text-amber-300' },
-          { key: 'preparing', label: '🔵 Preparing', active: 'bg-blue-500/10 border-blue-500/25 text-blue-300' },
-          { key: 'ready',     label: '🟢 Ready',     active: 'bg-green-500/10 border-green-500/25 text-green-400' },
-        ] as const).map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className={`px-3.5 py-1.5 rounded-full border text-[12px] transition-all ${
-              filter === f.key ? f.active : 'bg-white/[0.03] border-white/[0.07] text-white/30 hover:text-white/50'
-            }`}
-          >
+          { key: 'all',       label: 'All Orders',  cls: 'bg-ink-900 border-ink-900 text-white'       },
+          { key: 'new',       label: '🟠 New',        cls: 'bg-orange-500 border-orange-500 text-white' },
+          { key: 'preparing', label: '🔵 Preparing',  cls: 'bg-blue-600 border-blue-600 text-white'     },
+          { key: 'ready',     label: '🟢 Ready',      cls: 'bg-brand-500 border-brand-500 text-white'   },
+        ] as const).map(f => (
+          <button key={f.key} onClick={() => setFilter(f.key)}
+            className={`px-3.5 py-1.5 rounded-full border text-[12px] font-semibold transition-all ${
+              filter === f.key ? f.cls : 'bg-black border-ink-200 text-ink-500 hover:border-ink-300'
+            }`}>
             {f.label}
           </button>
         ))}
-        <div className="w-px h-5 bg-white/[0.06] mx-1" />
-        <button
-          onClick={() => setFilter('delivered')}
-          className={`text-[11px] px-3.5 py-1.5 rounded-full border transition-all ${
-            filter === 'delivered' ? 'bg-white/[0.07] border-white/15 text-[#f5e9d0]' : 'bg-white/[0.03] border-white/[0.07] text-white/30'
-          }`}
-        >
+        <div className="w-px h-5 bg-black mx-1" />
+        <button onClick={() => setFilter('delivered')}
+          className={`text-[11px] px-3.5 py-1.5 rounded-full border font-semibold transition-all ${
+            filter === 'delivered' ? 'bg-purple-500 border-purple-500 text-white' : 'bg-black border-ink-200 text-ink-400'
+          }`}>
           ✓ Delivered
         </button>
-        <button
-          onClick={injectNewOrder}
-          className="ml-auto flex items-center gap-1.5 px-3.5 py-1.5 rounded-[10px] bg-amber-400/10 border border-amber-400/30 text-[12px] text-amber-300 hover:bg-amber-400/18 transition-colors"
-        >
-          <BellRing size={13} /> Simulate New Order
-        </button>
+
       </div>
+
+      {/* WebSocket log bar */}
+      {wsLog.length > 0 && (
+        <div className="px-6 py-2 bg-black border-b border-ink-800 flex items-center gap-3 overflow-hidden">
+          <Radio size={12} className="text-green-400 flex-shrink-0" />
+          <p className="text-[10px] text-green-300 font-mono-dm truncate">{wsLog[0]}</p>
+          <span className="text-[9px] text-ink-500 flex-shrink-0">{wsLog.length} events</span>
+        </div>
+      )}
+
+      {/* Loading */}
+      {apiState === 'loading' && orders.length === 0 && (
+        <div className="flex-1 flex flex-col items-center justify-center gap-4">
+          <RefreshCw size={32} className="text-brand-400 animate-spin" />
+          <p className="text-[14px] text-ink-400 font-medium">Loading orders from API…</p>
+          <p className="text-[11px] text-ink-300 font-mono-dm">GET /orders?tenantId=t123&restaurantId=r456</p>
+        </div>
+      )}
 
       {/* Grid */}
-      <div className="flex-1 grid grid-cols-3 gap-3.5 p-5 content-start overflow-y-auto">
-        {filtered.length === 0 && (
-          <div className="col-span-3 flex flex-col items-center justify-center py-16 gap-3 border border-dashed border-white/[0.06] rounded-2xl bg-white/[0.01]">
-            <span className="text-[32px] opacity-20">✓</span>
-            <p className="text-[12px] text-white/15">No orders in this category</p>
-          </div>
-        )}
-        {filtered.map((order) => {
-          const pct = Math.min(100, (order.elapsedSeconds / order.maxSeconds) * 100);
-          const isUrgent  = pct >= 90;
-          const isWarning = pct >= 70 && pct < 90;
-          return (
-            <div
-              key={order.id}
-              className={`bg-surface-100 rounded-[18px] flex flex-col border transition-all ${
-                isUrgent  ? 'border-red-400/40 shadow-[0_0_0_1px_rgba(239,83,80,0.1)]' :
-                isWarning ? 'border-amber-400/35' :
-                            'border-white/[0.06]'
-              } hover:-translate-y-0.5 hover:shadow-card`}
-            >
-              {/* Status strip */}
-              <div className={`h-1 rounded-t-[18px] ${STRIP_COLOR[order.status]}`} />
-
-              {/* New badge */}
-              {order.status === 'new' && order.elapsedSeconds < 180 && (
-                <div className="absolute top-2.5 right-2.5 bg-amber-400/90 text-surface text-[9px] font-medium px-2 py-0.5 rounded-full uppercase tracking-wider">
-                  New
-                </div>
-              )}
-
-              {/* Card header */}
-              <div className="flex items-start justify-between px-4 py-3.5 border-b border-white/[0.05]">
-                <div>
-                  <p className="font-mono-dm text-[13px] font-medium text-[#f5e9d0]">#{order.id}</p>
-                  <p className="text-[11px] text-white/30 mt-0.5">🪑 Table {order.table} · {order.zone}</p>
-                </div>
-                <div className="text-right">
-                  <p className={`font-mono-dm text-[20px] font-medium leading-tight ${timerColorClass(order.elapsedSeconds, order.maxSeconds)}`}>
-                    {formatTimer(order.elapsedSeconds)}
-                  </p>
-                  <p className="text-[10px] text-white/20">Placed {order.placedAt}</p>
-                </div>
-              </div>
-
-              {/* Timer bar */}
-              <div className="h-[3px] bg-white/[0.05]">
-                <div
-                  className="h-full transition-all duration-1000"
-                  style={{ width: `${pct}%`, background: timerBarColor(order.elapsedSeconds, order.maxSeconds) }}
-                />
-              </div>
-
-              {/* Items */}
-              <div className="flex flex-col gap-2 px-4 py-3 flex-1">
-                {order.items.map((dish, i) => (
-                  <div key={i} className="flex items-center gap-2.5">
-                    <span className="text-[18px] w-8 text-center flex-shrink-0">{dish.emoji}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-[12px] font-medium text-[#f5e9d0] truncate">{dish.name}</p>
-                      {dish.mods && <p className="text-[10px] text-white/25">{dish.mods}</p>}
-                    </div>
-                    <span className="text-[12px] text-white/40 font-medium flex-shrink-0">×{dish.qty}</span>
-                    <button
-                      onClick={() => toggleDish(order.id, i)}
-                      className={`w-5 h-5 rounded-[6px] border flex items-center justify-center flex-shrink-0 transition-all ${
-                        dish.done
-                          ? 'bg-green-500/15 border-green-500/30'
-                          : 'border-white/10 hover:bg-white/[0.06]'
-                      }`}
-                    >
-                      {dish.done && <span className="text-green-400 text-[11px]">✓</span>}
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              {/* Note */}
-              {order.note && (
-                <div className="mx-4 mb-2 p-2 rounded-[9px] bg-white/[0.03] border border-white/[0.06] flex items-start gap-1.5">
-                  <span className="text-amber-400 text-xs flex-shrink-0 mt-0.5">⚠</span>
-                  <p className="text-[10px] text-white/30 leading-relaxed">{order.note}</p>
-                </div>
-              )}
-
-              {/* Footer actions */}
-              <div className="flex gap-2 px-4 py-3 border-t border-white/[0.05]">
-                {BTN_CONFIG[order.status].map((btn, i) => (
-                  <button
-                    key={btn.label}
-                    onClick={() => i === 0 && advanceOrder(order.id)}
-                    disabled={order.status === 'delivered'}
-                    className={`flex-1 h-9 rounded-[10px] flex items-center justify-center gap-1.5 text-[12px] font-medium border transition-all ${btn.cls}`}
-                  >
-                    {btn.label}
-                  </button>
-                ))}
-              </div>
+      {(apiState !== 'loading' || orders.length > 0) && (
+        <div className="flex-1 grid grid-cols-3 gap-4 p-5 content-start overflow-y-auto">
+          {filtered.length === 0 && (
+            <div className="col-span-3 flex flex-col items-center justify-center py-16 gap-3 border-2 border-dashed border-ink-200 rounded-3xl bg-black">
+              <span className="text-4xl opacity-30">✓</span>
+              <p className="text-[13px] text-ink-300 font-medium">No orders in this category</p>
+              <p className="text-[11px] text-ink-300">
+                {orders.length === 0 ? 'Waiting for orders…' : `${orders.length} orders in other categories`}
+              </p>
             </div>
-          );
-        })}
-      </div>
+          )}
+
+          {filtered.map(order => {
+            const pct         = Math.min(100, (order.elapsedSeconds / order.maxSeconds) * 100);
+            const isUrgent    = pct >= 90;
+            const isAdvancing = advancing === order.id;
+            const allDone     = order.items.every(i => i.done);
+
+            return (
+              <div key={order.id}
+                className={`bg-black rounded-3xl flex flex-col border transition-all hover:-translate-y-0.5 hover:shadow-card-lg ${
+                  isUrgent ? 'border-red-300 shadow-[0_0_0_2px_rgba(239,68,68,0.12)]' : 'border-ink-100 shadow-card'
+                }`}>
+
+                <div className={`h-1.5 rounded-t-3xl ${STRIP[order.status]}`} />
+
+                <div className="flex items-start justify-between px-4 py-3.5 border-b border-ink-100">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-mono-dm text-[13px] font-semibold text-ink-800">#{order.id}</p>
+                      {allDone && order.status !== 'delivered' && (
+                        <span className="text-[9px] bg-green-50 border border-green-200 text-green-700 px-1.5 py-0.5 rounded-full font-semibold">ALL DONE</span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-ink-400 mt-0.5">🪑 Table {order.table} · {order.zone}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`font-mono-dm text-[20px] font-bold ${timerColorClass(order.elapsedSeconds, order.maxSeconds)}`}>
+                      {formatTimer(order.elapsedSeconds)}
+                    </p>
+                    <p className="text-[10px] text-ink-400">Placed {order.placedAt}</p>
+                  </div>
+                </div>
+
+                <div className="h-1.5 bg-ink-100">
+                  <div className="h-full rounded-full transition-all duration-1000"
+                    style={{ width:`${pct}%`, background: timerBarColor(order.elapsedSeconds, order.maxSeconds) }} />
+                </div>
+
+                <div className="flex flex-col gap-2 px-4 py-3 flex-1">
+                  {order.items.map((dish, i) => (
+                    <div key={i} className="flex items-center gap-2.5">
+                      <span className="text-[18px] w-8 text-center">{dish.emoji}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className={`text-[12px] font-semibold truncate ${dish.done ? 'line-through text-ink-300' : 'text-ink-800'}`}>{dish.name}</p>
+                        {dish.mods && <p className="text-[10px] text-ink-400">{dish.mods}</p>}
+                      </div>
+                      <span className="text-[12px] text-ink-500 font-semibold">×{dish.qty}</span>
+                      <button onClick={() => toggleDish(order.id, i)}
+                        className={`w-5 h-5 rounded-[5px] border flex items-center justify-center transition-all ${
+                          dish.done ? 'bg-brand-500 border-brand-500' : 'border-ink-200 hover:bg-ink-50'
+                        }`}>
+                        {dish.done && <span className="text-white text-[11px]">✓</span>}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {order.note && (
+                  <div className="mx-4 mb-2 p-2 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-1.5">
+                    <span className="text-amber-500 text-xs mt-0.5">⚠</span>
+                    <p className="text-[10px] text-amber-700 leading-relaxed font-medium">{order.note}</p>
+                  </div>
+                )}
+
+                <div className="flex gap-2 px-4 py-3 border-t border-ink-100">
+                  {BTN_CFG[order.status].map((btn, i) => (
+                    <button key={btn.label}
+                      onClick={() => i === 0 && advanceOrder(order.id)}
+                      disabled={order.status === 'delivered' || isAdvancing}
+                      className={`flex-1 h-9 rounded-xl flex items-center justify-center gap-1.5 text-[12px] font-semibold border transition-all ${btn.cls} disabled:opacity-50`}>
+                      {isAdvancing && i === 0
+                        ? <RefreshCw size={12} className="animate-spin" />
+                        : btn.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
