@@ -16,8 +16,6 @@ const TAG_STYLES: Record<string, string> = {
   chef:    'bg-amber-50 border border-amber-200 text-amber-700',
 };
 
-const RID = process.env.NEXT_PUBLIC_RESTAURANT_ID ?? '';
-
 export default function ItemDetailPage() {
   const { id }  = useParams<{ id: string }>();
   const router  = useRouter();
@@ -38,8 +36,9 @@ export default function ItemDetailPage() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    const rid = sessionStorage.getItem('lm_rid') || process.env.NEXT_PUBLIC_RESTAURANT_ID || '';
-    fetchMenuItem(id, rid)
+    // Always use the menu restaurant ID — not the QR session rid
+    const menuRid = process.env.NEXT_PUBLIC_RESTAURANT_ID || '53591ab9-ac4e-4841-958b-d38853a90f0b';
+    fetchMenuItem(id, menuRid)
       .then(raw => {
         const normalised = normaliseItem(raw);
         setItem(normalised);
@@ -54,9 +53,8 @@ export default function ItemDetailPage() {
           return;
         }
         // Fallback: check AR API
-        const arRid = sessionStorage.getItem('lm_rid')
-          || process.env.NEXT_PUBLIC_RESTAURANT_ID
-          || '';
+        const arRid = process.env.NEXT_PUBLIC_RESTAURANT_ID
+          || '53591ab9-ac4e-4841-958b-d38853a90f0b';
         if (!arRid) { setArReady(false); return; }
         fetch(`/api/ar?rid=${encodeURIComponent(arRid)}&iid=${encodeURIComponent(id)}`, { cache: 'no-store' })
           .then(r => setArReady(r.ok))
@@ -91,9 +89,8 @@ export default function ItemDetailPage() {
   );
 
   // Read restaurant ID from QR scan session — fully dynamic, works for any restaurant
-  const rid = (typeof window !== 'undefined' ? sessionStorage.getItem('lm_rid') : null)
-    || process.env.NEXT_PUBLIC_RESTAURANT_ID
-    || '';
+  const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID
+    || '53591ab9-ac4e-4841-958b-d38853a90f0b';
   const arModelUrl = (item as any).arModelUrl ?? '';
   const arHref = `/guest/ar?rid=${encodeURIComponent(rid)}&iid=${encodeURIComponent(id)}&name=${encodeURIComponent(item.name)}&emoji=${encodeURIComponent(item.emoji ?? '🍽️')}${arModelUrl ? '&url=' + encodeURIComponent(arModelUrl) : ''}`;
 
