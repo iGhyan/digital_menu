@@ -33,15 +33,15 @@ function MenuContent() {
   const { addItem, itemCount } = useCartStore();
 
   useEffect(() => {
-    // Get rid from URL param → sessionStorage → env var
+    // Store QR rid in session (for AR and order tracking)
     const urlRid = params.get('rid') || '';
-    const sessionRid = typeof window !== 'undefined' ? sessionStorage.getItem('lm_rid') || '' : '';
-    const rid = urlRid || sessionRid || process.env.NEXT_PUBLIC_RESTAURANT_ID || '';
+    if (urlRid && typeof window !== 'undefined') sessionStorage.setItem('lm_rid', urlRid);
 
-    // Store in session for other pages
-    if (rid && typeof window !== 'undefined') sessionStorage.setItem('lm_rid', rid);
+    // Always use env var restaurant ID for menu API
+    // The QR rid identifies the restaurant session but menu items belong to NEXT_PUBLIC_RESTAURANT_ID
+    const menuRid = process.env.NEXT_PUBLIC_RESTAURANT_ID || '53591ab9-ac4e-4841-958b-d38853a90f0b';
 
-    fetchMenuItems(rid)
+    fetchMenuItems(menuRid)
       .then(raw => { setItems(raw.map(normaliseItem)); setLoading(false); })
       .catch(e => { setError(e?.message ?? 'Failed to load menu'); setLoading(false); });
   }, [params]);

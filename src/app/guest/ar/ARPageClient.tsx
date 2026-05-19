@@ -53,7 +53,7 @@ export default function ARPageClient({ restaurantId, itemId, itemName, emoji, pr
     const rid = restaurantId?.trim()
       || (typeof window !== 'undefined' ? sessionStorage.getItem('lm_rid') || '' : '')
       || process.env.NEXT_PUBLIC_RESTAURANT_ID
-      || '2687382e-3b00-4f57-9014-f484df89e3fe';
+      || '53591ab9-ac4e-4841-958b-d38853a90f0b';
 
     fetchArModel(rid, itemId.trim())
       .then(d => {

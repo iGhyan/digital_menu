@@ -7,7 +7,7 @@
 // Set these in .env.local (local) and Vercel dashboard (production)
 export const RESTAURANT_ID =
   process.env.NEXT_PUBLIC_RESTAURANT_ID
-  || '2687382e-3b00-4f57-9014-f484df89e3fe'; // default restaurant
+  || '53591ab9-ac4e-4841-958b-d38853a90f0b'; // menu restaurant ID
 
 export const TENANT_ID =
   process.env.NEXT_PUBLIC_TENANT_ID
