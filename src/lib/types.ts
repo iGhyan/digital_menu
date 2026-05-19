@@ -150,7 +150,7 @@ export interface QrGenerateRequest {
   tableNumber:  string;
   zone:         string;
   outlet:       string;
-  baseUrl:      string;   // e.g. https://digital-menu-amber.vercel.app
+  baseUrl:      string;   
 }
 // ── QR Module ─────────────────────────────────────────────────────────────────
 export interface QrRecord {

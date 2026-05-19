@@ -57,7 +57,7 @@ export function createQrRecord(req: QrGenerateRequest): QrRecord {
 // NOTE: INITIAL_QR_RECORDS uses a fixed base URL so it is safe to import
 // from server components too (no window access at module level).
 
-const DEFAULT_BASE = 'https://digital-menu-amber.vercel.app';
+const DEFAULT_BASE = 'https://digital-menu-three-olive.vercel.app';
 
 function makeSeeds(): QrRecord[] {
   const mainHall = Array.from({ length: 8 }, (_, i) => {

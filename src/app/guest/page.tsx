@@ -34,7 +34,7 @@ function GuestContent() {
   const isQrScan = params.has('rid') && params.has('tid');
 
   return (
-    <main className="min-h-dvh bg-black from-slate-50 to-teal-50/40 flex flex-col items-center justify-center p-6">
+    <main className="min-h-dvh bg-black from-slate-50 to-teal-50/40 flex flex-col items-center justify-center">
       {/* Decorative blobs */}
       <div className="fixed top-0 right-0 w-96 h-96 bg-teal-100/40 rounded-full blur-3xl pointer-events-none -translate-y-1/2 translate-x-1/2" />
       <div className="fixed bottom-0 left-0 w-80 h-80 bg-brand-100/30 rounded-full blur-3xl pointer-events-none translate-y-1/2 -translate-x-1/2" />
