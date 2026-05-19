@@ -94,7 +94,8 @@ export default function ItemDetailPage() {
   const rid = (typeof window !== 'undefined' ? sessionStorage.getItem('lm_rid') : null)
     || process.env.NEXT_PUBLIC_RESTAURANT_ID
     || '';
-  const arHref = `/guest/ar?rid=${encodeURIComponent(rid)}&iid=${encodeURIComponent(id)}&name=${encodeURIComponent(item.name)}&emoji=${encodeURIComponent(item.emoji ?? '🍽️')}`;
+  const arModelUrl = (item as any).arModelUrl ?? '';
+  const arHref = `/guest/ar?rid=${encodeURIComponent(rid)}&iid=${encodeURIComponent(id)}&name=${encodeURIComponent(item.name)}&emoji=${encodeURIComponent(item.emoji ?? '🍽️')}${arModelUrl ? '&url=' + encodeURIComponent(arModelUrl) : ''}`;
 
   const handleAdd = () => {
     addItem({

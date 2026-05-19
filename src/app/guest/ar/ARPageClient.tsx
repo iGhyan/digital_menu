@@ -20,13 +20,14 @@ const ARViewer = dynamic(
 );
 
 interface Props {
-  restaurantId: string;
-  itemId:       string;
-  itemName:     string;
-  emoji:        string;
+  restaurantId:     string;
+  itemId:           string;
+  itemName:         string;
+  emoji:            string;
+  preloadedGlbUrl?: string;  // from arModelUrl in menu API — skip AR API call
 }
 
-export default function ARPageClient({ restaurantId, itemId, itemName, emoji }: Props) {
+export default function ARPageClient({ restaurantId, itemId, itemName, emoji, preloadedGlbUrl }: Props) {
   const router = useRouter();
   const [glbUrl,  setGlbUrl]  = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,8 +60,11 @@ export default function ARPageClient({ restaurantId, itemId, itemName, emoji }: 
   }, [restaurantId, itemId]);
 
   return (
-    <main className="min-h-dvh bg-slate-50 flex flex-col items-center">
+    <main className="min-h-dvh bg-slate-50 flex flex-col items-center py-6 px-4">
       <div className="phone-shell">
+        <div className="flex justify-between px-5 pt-4 text-xs text-ink-400">
+          <span>9:44</span><span>●●●</span>
+        </div>
 
         {/* Nav */}
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-ink-100">
