@@ -52,7 +52,7 @@ export interface ApiMenuResponse {
 // ── GET all items ──────────────────────────────────────────────────────────────
 export async function fetchMenuItems(restaurantId?: string): Promise<ApiMenuItem[]> {
   try {
-    const rid = restaurantId || RESTAURANT_ID;
+    const rid = restaurantId || getRestaurantId();
     if (!rid) {
       throw new Error('Restaurant ID is missing. Set NEXT_PUBLIC_RESTAURANT_ID in env or pass rid param.');
     }
@@ -77,7 +77,7 @@ export async function fetchMenuItems(restaurantId?: string): Promise<ApiMenuItem
 
 // ── GET item by ID ─────────────────────────────────────────────────────────────
 export async function fetchMenuItem(itemId: string, restaurantId?: string): Promise<ApiMenuItem> {
-  const rid = restaurantId || RESTAURANT_ID;
+  const rid = restaurantId || getRestaurantId();
   return apiFetch<ApiMenuItem>(MENU_API.item(itemId, rid));
 }
 
