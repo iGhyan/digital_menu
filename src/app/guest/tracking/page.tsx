@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, RefreshCw, CheckCircle, ChefHat, Bell, Bike } from 'lucide-react';
+import Link from 'next/link';
 
 interface LineItem {
   name:                 string;
@@ -341,19 +342,18 @@ export default function TrackingPage() {
           )}
         </div>
 
-        {/* Bottom nav */}
-        <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.05] bg-surface">
+           <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.05] bg-[#14b8a60f]">
           {[
-            { icon: '🏠', label: 'Home',   href: '/guest'           },
-            { icon: '📖', label: 'Menu',   href: '/guest/menu'      },
-            { icon: '🛒', label: 'Cart',   href: '/guest/cart'      },
-            { icon: '📡', label: 'Orders', href: '/guest/tracking', active: true },
+            { icon: '🏠', label: 'Home',   href: '/guest' },
+            { icon: '📖', label: 'Menu',   href: '/guest/menu', active: true },
+            { icon: '🛒', label: 'Cart',   href: '/guest/cart' },
+            { icon: '🕐', label: 'Orders', href: '/guest/tracking' },
           ].map(n => (
-            <button key={n.label} onClick={() => router.push(n.href)}
+            <Link key={n.label} href={n.href}
               className={`flex flex-col items-center gap-1 px-2.5 py-1 ${n.active ? 'text-gold-400' : 'text-white/20'}`}>
               <span className="text-[20px]">{n.icon}</span>
               <span className="text-[10px] font-medium">{n.label}</span>
-            </button>
+            </Link>
           ))}
         </div>
       </div>
