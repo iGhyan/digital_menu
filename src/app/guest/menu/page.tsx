@@ -67,15 +67,11 @@ function MenuContent() {
   };
 
   return (
-    <main className="min-h-dvh bg-surface flex flex-col items-center p-6">
+    <main className="min-h-dvh bg-surface flex flex-col items-center">
       <div className="phone-shell">
 
-        <div className="flex justify-between px-5 pt-3.5 text-xs text-white/35">
-          <span>9:41</span><span>●●●</span>
-        </div>
-
         {/* Top nav */}
-        <div className="flex items-center justify-between px-5 py-4">
+        <div className="flex items-center justify-between p-8">
           <div>
             <p className="text-[11px] text-white/30 uppercase tracking-widest">
               {typeof window !== 'undefined' ? `Table ${sessionStorage.getItem('lm_table') ?? '—'} · La Maison` : 'La Maison'}
@@ -183,7 +179,7 @@ function MenuContent() {
         )}
 
         {/* Bottom nav */}
-        <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.05] bg-surface">
+        <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.05] bg-[#14b8a60f]">
           {[
             { icon: '🏠', label: 'Home',   href: '/guest' },
             { icon: '📖', label: 'Menu',   href: '/guest/menu', active: true },

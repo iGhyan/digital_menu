@@ -108,20 +108,18 @@ export default function ItemDetailPage() {
   };
 
   return (
-    <main className="min-h-dvh bg-slate-50 flex flex-col items-center py-6 px-4">
+    <main className="min-h-dvh bg-black flex flex-col items-center ">
       <div className="phone-shell">
-        <div className="flex justify-between px-5 pt-4 text-xs text-ink-400"><span>9:43</span><span>●●●</span></div>
-
         {/* Hero */}
         <div className="relative w-full h-[210px] flex items-center justify-center text-[88px] bg-gradient-to-br from-brand-50 to-teal-50">
           <span className="drop-shadow-lg">{item.emoji}</span>
-          <button onClick={() => router.back()} className="absolute top-3 left-4 w-9 h-9 rounded-xl bg-white shadow-card border border-ink-100 flex items-center justify-center">
+          <button onClick={() => router.back()} className="absolute top-3 left-4 w-9 h-9 rounded-xl bg-black shadow-card border border-ink-100 flex items-center justify-center">
             <ArrowLeft size={16} className="text-ink-600" />
           </button>
-          <button onClick={() => setWished(!wished)} className={`absolute top-3 right-14 w-9 h-9 rounded-xl shadow-card border flex items-center justify-center transition-all ${wished ? 'bg-red-50 border-red-200' : 'bg-white border-ink-100'}`}>
+          <button onClick={() => setWished(!wished)} className={`absolute top-3 right-14 w-9 h-9 rounded-xl shadow-card border flex items-center justify-center transition-all ${wished ? 'bg-red-50 border-red-200' : 'bg-black border-ink-100'}`}>
             <Heart size={16} className={wished ? 'text-red-500 fill-red-500' : 'text-ink-400'} />
           </button>
-          <button className="absolute top-3 right-4 w-9 h-9 rounded-xl bg-white shadow-card border border-ink-100 flex items-center justify-center">
+          <button className="absolute top-3 right-4 w-9 h-9 rounded-xl bg-black shadow-card border border-ink-100 flex items-center justify-center">
             <Share2 size={16} className="text-ink-400" />
           </button>
           <div className="absolute bottom-3.5 left-4 flex gap-1.5">
@@ -134,13 +132,13 @@ export default function ItemDetailPage() {
 
           {/* AR button — only shown if model exists */}
           {arReady === true && (
-            <Link href={arHref} className="absolute bottom-3.5 right-4 flex items-center gap-1.5 bg-white border border-brand-200 rounded-full px-2.5 py-1.5 shadow-card hover:bg-brand-50 transition-colors">
+            <Link href={arHref} className="absolute bottom-3.5 right-4 flex items-center gap-1.5 bg-black border border-brand-200 rounded-full px-2.5 py-1.5 shadow-card hover:bg-brand-50 transition-colors">
               <Cuboid size={12} className="text-brand-600" />
-              <span className="text-[10px] text-brand-700 font-semibold">View in AR</span>
+              <span className="text-[10px] text-white font-semibold">View in AR</span>
             </Link>
           )}
           {arReady === null && (
-            <div className="absolute bottom-3.5 right-4 flex items-center gap-1.5 bg-white border border-ink-200 rounded-full px-2.5 py-1.5 shadow-card opacity-50">
+            <div className="absolute bottom-3.5 right-4 flex items-center gap-1.5 bg-black border border-ink-200 rounded-full px-2.5 py-1.5 shadow-card opacity-50">
               <Loader2 size={11} className="text-ink-400 animate-spin" />
               <span className="text-[10px] text-ink-400">AR…</span>
             </div>
@@ -231,7 +229,7 @@ export default function ItemDetailPage() {
                   <div className="flex gap-2 flex-wrap">
                     {g.opts!.map(o => (
                       <button key={o} onClick={() => g.set(o)}
-                        className={`px-3.5 py-1.5 rounded-full border text-[12px] font-medium transition-all ${g.val===o ? 'bg-brand-500 border-brand-500 text-white shadow-brand' : 'bg-white border-ink-200 text-ink-500 hover:border-brand-300'}`}>
+                        className={`px-3.5 py-1.5 rounded-full border text-[12px] font-medium transition-all ${g.val===o ? 'bg-brand-500 border-brand-500 text-white shadow-brand' : 'bg-black border-ink-200 text-ink-500 hover:border-brand-300'}`}>
                         {o}
                       </button>
                     ))}
@@ -244,7 +242,7 @@ export default function ItemDetailPage() {
           {/* Quantity */}
           <div className="flex items-center justify-between px-5 py-4 border-b border-ink-100">
             <div><p className="text-[13px] font-semibold text-ink-700">Quantity</p><p className="text-[11px] text-ink-400">Max 5</p></div>
-            <div className="flex items-center border border-ink-200 rounded-2xl overflow-hidden bg-white shadow-card">
+            <div className="flex items-center border border-ink-200 rounded-2xl overflow-hidden bg-black shadow-card">
               <button onClick={() => setQty(Math.max(1,qty-1))} className="w-10 h-10 flex items-center justify-center hover:bg-ink-50 transition-colors text-ink-500 font-bold text-lg">−</button>
               <span className="w-10 h-10 flex items-center justify-center text-[16px] font-semibold text-ink-900 border-x border-ink-200">{qty}</span>
               <button onClick={() => setQty(Math.min(5,qty+1))} className="w-10 h-10 flex items-center justify-center hover:bg-brand-50 transition-colors text-brand-600 font-bold text-lg">+</button>
@@ -254,7 +252,7 @@ export default function ItemDetailPage() {
         </div>
 
         {/* Footer */}
-        <div className="px-5 pt-3.5 pb-6 border-t border-ink-100 flex items-center gap-3 bg-white">
+        <div className="p-4 flex items-center gap-3 bg-[#14b8a60f]">
           <div>
             <p className="text-[10px] text-ink-400 uppercase tracking-widest font-semibold">Total</p>
             <p className="font-serif text-[22px] text-brand-600 font-semibold">{formatPrice(item.price * qty)}</p>

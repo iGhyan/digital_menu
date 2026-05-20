@@ -72,12 +72,8 @@ export default function ARPageClient({ restaurantId, itemId, itemName, emoji, pr
   }, [restaurantId, itemId, preloadedGlbUrl]);
 
   return (
-    <main className="min-h-dvh bg-slate-50 flex flex-col items-center py-6 px-4">
+    <main className="min-h-dvh bg-black flex flex-col items-center">
       <div className="phone-shell">
-        <div className="flex justify-between px-5 pt-4 text-xs text-ink-400">
-          <span>9:44</span><span>●●●</span>
-        </div>
-
         {/* Nav */}
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-ink-100">
           <button onClick={() => router.back()}

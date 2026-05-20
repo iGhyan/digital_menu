@@ -65,6 +65,15 @@
   .btn-gold:active  { transform: scale(0.97); }
   .btn-gold:disabled { opacity: 0.5; cursor: not-allowed; }
 
+   .btn-gold-small {
+    display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+    width: 40%; height: 3.5rem; border-radius: 1rem;
+    background: linear-gradient(135deg, #14b8a6 0%, #c4873c 100%);
+    color: #ffffff; font-weight: 500; font-size: 1rem;
+    border: none; cursor: pointer;
+    transition: opacity 0.2s, transform 0.15s;
+    position: relative; overflow: hidden;
+  }
   /* Ghost button */
   .btn-ghost {
     display: flex; align-items: center; justify-content: center; gap: 0.5rem;
