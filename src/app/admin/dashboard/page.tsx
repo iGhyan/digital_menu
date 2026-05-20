@@ -134,7 +134,7 @@ export default function AdminDashboardPage() {
 
   return (
     <>
-      <div className="flex items-center justify-between px-6 py-4 border-b border-ink-100 bg-black">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#14b8a6] bg-black">
         <div>
           <h1 className="font-serif text-[20px] text-ink-900 font-semibold">Dashboard</h1>
           <p className="text-[12px] text-ink-400 mt-0.5">
@@ -144,7 +144,7 @@ export default function AdminDashboardPage() {
         <div className="flex items-center gap-2.5">
           {lastSync && <p className="text-[11px] text-ink-400">Synced {lastSync}</p>}
           <button onClick={loadOrders}
-            className="w-9 h-9 rounded-xl bg-ink-50 border border-ink-200 flex items-center justify-center hover:bg-ink-100 transition-colors"
+            className="w-9 h-9 rounded-xl bg-[#14b8a60f] border border-[#14b8a6] flex items-center justify-center hover:bg-ink-100 transition-colors"
             title="Refresh">
             <RefreshCw size={14} className={`text-ink-400 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -165,7 +165,7 @@ export default function AdminDashboardPage() {
         {/* Stats */}
         <div className="grid grid-cols-4 gap-3 mb-8">
           {stats.map(s => (
-            <div key={s.label} className="bg-black border border-ink-100 rounded-2xl p-4 shadow-card">
+            <div key={s.label} className="bg-[#14b8a60f] border border-[#14b8a6] rounded-2xl p-4 shadow-card">
               <p className="text-[11px] text-ink-400 uppercase tracking-widest font-semibold mb-2">{s.label}</p>
               <p className="font-serif text-[22px] text-ink-900 font-semibold mb-1">{s.val}</p>
               <p className={`text-[11px] flex items-center gap-1 ${
@@ -184,8 +184,8 @@ export default function AdminDashboardPage() {
             const Icon = ql.icon;
             return (
               <Link key={ql.href} href={ql.href}
-                className="bg-black border border-ink-100 rounded-2xl p-5 hover:border-brand-200 hover:shadow-card-lg transition-all group shadow-card">
-                <div className="w-10 h-10 rounded-xl bg-brand-50 border border-brand-100 flex items-center justify-center mb-3 group-hover:bg-brand-100 transition-colors">
+                className="bg-[#14b8a60f] border border-[#14b8a6] rounded-2xl p-5 hover:border-brand-200 hover:shadow-card-lg transition-all group shadow-card">
+                <div className="w-10 h-10 rounded-xl bg-brand-50 border border-[#14b8a6] flex items-center justify-center mb-3 group-hover:bg-brand-100 transition-colors">
                   <Icon size={18} className="text-brand-600" />
                 </div>
                 <p className="text-[14px] font-semibold text-ink-900 mb-1">{ql.label}</p>
@@ -203,9 +203,9 @@ export default function AdminDashboardPage() {
           </Link>
         </div>
 
-        <div className="bg-black border border-ink-100 rounded-2xl overflow-hidden shadow-card">
+        <div className="bg-[#14b8a60f] border border-[#14b8a6] rounded-2xl overflow-hidden shadow-card">
           {/* Header */}
-          <div className="grid gap-3 px-4 py-3 border-b border-ink-100"
+          <div className="grid gap-3 px-4 py-3 border border-[#14b8a6]"
             style={{ gridTemplateColumns: '130px 80px 60px 110px 95px 80px' }}>
             {['Order ID', 'Table', 'Items', 'Total', 'Status', 'Time'].map(h => (
               <div key={h} className="text-[11px] text-ink-400 uppercase tracking-widest font-semibold">{h}</div>
@@ -214,7 +214,7 @@ export default function AdminDashboardPage() {
 
           {/* Loading skeleton */}
           {loading && Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="grid gap-3 px-4 py-4 border-b border-ink-100 last:border-0 items-center"
+            <div key={i} className="grid gap-3 px-4 py-4 border border-[#14b8a6] last:border-0 items-center"
               style={{ gridTemplateColumns: '130px 80px 60px 110px 95px 80px' }}>
               {Array.from({ length: 6 }).map((_, j) => (
                 <div key={j} className="h-3 bg-ink-100 rounded animate-pulse" />
@@ -236,7 +236,7 @@ export default function AdminDashboardPage() {
             const itemCount = order.lineItems?.length ?? 0;
             return (
               <div key={order.orderId}
-                className="grid gap-3 px-4 py-3.5 border-b border-ink-100 last:border-0 items-center hover:bg-ink-50 transition-colors"
+                className="grid gap-3 px-4 py-3.5 bg-[#14b8a60f] border border-[#14b8a6] last:border-0 items-center hover:bg-ink-50 transition-colors"
                 style={{ gridTemplateColumns: '130px 80px 60px 110px 95px 80px' }}>
                 <span className="font-mono-dm text-[12px] text-ink-800 font-semibold truncate">
                   {shortId(order.orderId)}
@@ -258,7 +258,7 @@ export default function AdminDashboardPage() {
 
           {/* Footer */}
           {!loading && orders.length > 0 && (
-            <div className="px-4 py-3 border-t border-ink-100 flex items-center justify-between">
+            <div className="px-4 py-3 border-t border-[#14b8a6] flex items-center justify-between">
               <p className="text-[11px] text-ink-400">
                 Showing {recentOrders.length} of {orders.length} orders
               </p>

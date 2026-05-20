@@ -151,7 +151,7 @@ export default function AdminMenuPage() {
   return (
     <>
       {/* Top bar */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-ink-100 bg-black-500">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-[#14b8a6]">
         <div>
           <h1 className="font-serif text-[20px] text-ink-900 font-semibold">Menu Management</h1>
           <p className="text-[12px] text-ink-400">
@@ -166,10 +166,10 @@ export default function AdminMenuPage() {
               className="h-9 pl-8 pr-3 rounded-xl w-[200px] text-[13px] border-ink-200" />
           </div>
           <button onClick={loadItems} title="Refresh from API"
-            className="w-9 h-9 rounded-xl bg-black-500 border border-ink-200 flex items-center justify-center hover:bg-ink-100 transition-colors">
+            className="w-9 h-9 rounded-xl bg-[#14b8a60f] border border-[#14b8a6] flex items-center justify-center hover:bg-ink-100 transition-colors">
             <RefreshCw size={14} className={`text-ink-400 ${loadState === 'loading' ? 'animate-spin' : ''}`} />
           </button>
-          <button className="w-9 h-9 rounded-xl bg-black-500 border border-ink-200 flex items-center justify-center">
+          <button className="w-9 h-9 rounded-xl bg-[#14b8a60f] border border-[#14b8a6] flex items-center justify-center">
             <Bell size={16} className="text-ink-400" />
           </button>
           <button onClick={() => openModal()}
@@ -199,7 +199,7 @@ export default function AdminMenuPage() {
         {/* Stats */}
         <div className="grid grid-cols-4 gap-3 mb-6">
           {STATS_LABELS.map(s => (
-            <div key={s.label} className="bg-black-500 border border-ink-100 rounded-2xl p-4 shadow-card">
+            <div key={s.label} className="bg-[#14b8a60f] border border-[#14b8a6] rounded-2xl p-4 shadow-card">
               <p className="text-[11px] text-ink-400 uppercase tracking-widest font-semibold mb-2">{s.label}</p>
               <p className={`font-serif text-[26px] font-semibold ${s.color}`}>
                 {loadState === 'loading' ? '…' : stats[s.key as keyof typeof stats]}
@@ -234,9 +234,9 @@ export default function AdminMenuPage() {
 
         {/* Loading skeleton */}
         {loadState === 'loading' && (
-          <div className="bg-black-500 border border-ink-100 rounded-2xl overflow-hidden shadow-card">
+          <div className="bg-[#14b8a60f] border border-[#14b8a6] rounded-2xl overflow-hidden shadow-card">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-4 px-4 py-4 border-b border-ink-100 last:border-0">
+              <div key={i} className="flex items-center gap-4 px-4 py-4 border border-[#14b8a6] last:border-0">
                 <div className="w-10 h-10 rounded-xl bg-ink-100 animate-pulse flex-shrink-0" />
                 <div className="flex-1 space-y-2">
                   <div className="h-3 bg-ink-100 rounded animate-pulse w-1/3" />
@@ -251,8 +251,8 @@ export default function AdminMenuPage() {
 
         {/* Table */}
         {loadState !== 'loading' && (
-          <div className="bg-black-500 border border-ink-100 rounded-2xl overflow-hidden shadow-card">
-            <div className="grid gap-3 px-4 py-3 border-b border-ink-100"
+          <div className="bg-[#14b8a60f] border border-[#14b8a6] rounded-2xl overflow-hidden shadow-card">
+            <div className="grid gap-3 px-4 py-3 border-b border-[#14b8a6]"
               style={{ gridTemplateColumns: '40px 1fr 120px 80px 80px 90px 80px' }}>
               {['', 'Item', 'Category', 'Price', 'Rating', 'Status', 'Actions'].map(h => (
                 <div key={h} className="text-[11px] text-ink-400 uppercase tracking-widest font-semibold">{h}</div>
@@ -272,7 +272,7 @@ export default function AdminMenuPage() {
 
             {filtered.map((item, idx) => (
               <div key={item.id ?? `item-${idx}`}
-                className="grid gap-3 px-4 py-3.5 border-b border-ink-100 last:border-0 items-center hover:bg-ink-50 transition-colors cursor-pointer"
+                className="grid gap-3 px-4 py-3.5 border-b border-[#14b8a6] last:border-0 items-center hover:bg-ink-50 transition-colors cursor-pointer"
                 style={{ gridTemplateColumns: '40px 1fr 120px 80px 80px 90px 80px' }}>
                 <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-[22px]">
                   {item.emoji}
@@ -305,7 +305,7 @@ export default function AdminMenuPage() {
               </div>
             ))}
 
-            <div className="flex items-center justify-between px-4 py-3.5 border-t border-ink-100">
+            <div className="flex items-center justify-between px-4 py-3.5 border-t border-[#14b8a6]">
               <p className="text-[12px] text-ink-400">
                 Showing {filtered.length} of {items.length} items
               </p>
