@@ -303,7 +303,7 @@ export default function KitchenDisplayPage() {
       )}
 
       {/* Top bar */}
-      <header className="flex items-center justify-between px-6 py-3.5 bg-black border-b border-ink-100 shadow-card">
+      <header className="flex items-center justify-between px-6 py-3.5 bg-[#14b8a60f] border-b border-[#14b8a6] shadow-card">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center text-white text-base shadow-brand">🍽️</div>
           <div>
@@ -349,7 +349,7 @@ export default function KitchenDisplayPage() {
             { val: counts.preparing, label: 'Preparing', cls: 'text-blue-600'  },
             { val: counts.ready,     label: 'Ready',     cls: 'text-brand-600' },
           ].map(s => (
-            <div key={s.label} className="flex flex-col items-center px-3.5 py-1.5 rounded-xl border border-ink-100 bg-black
+            <div key={s.label} className="flex flex-col items-center px-3.5 py-1.5 rounded-xl bg-[#14b8a60f] border border-[#14b8a6]
              shadow-card">
               <span className={`text-[18px] font-bold font-serif ${s.cls}`}>{s.val}</span>
               <span className="text-[9px] text-ink-400 uppercase tracking-widest font-semibold">{s.label}</span>
@@ -377,7 +377,7 @@ export default function KitchenDisplayPage() {
       )}
 
       {/* Filter bar */}
-      <div className="flex items-center gap-2 px-6 py-3 bg-black border-b border-ink-100">
+      <div className="flex items-center gap-2 px-6 py-3 bg-[#14b8a60f] border-b border-[#14b8a6]">
         {([
           { key: 'all',       label: 'All Orders',  cls: 'bg-ink-900 border-ink-900 text-white'       },
           { key: 'new',       label: '🟠 New',        cls: 'bg-orange-500 border-orange-500 text-white' },
@@ -403,7 +403,7 @@ export default function KitchenDisplayPage() {
 
       {/* WebSocket log bar */}
       {wsLog.length > 0 && (
-        <div className="px-6 py-2 bg-black border-b border-ink-800 flex items-center gap-3 overflow-hidden">
+        <div className="px-6 py-2 bg-black border-b border-[#14b8a6] flex items-center gap-3 overflow-hidden">
           <Radio size={12} className="text-green-400 flex-shrink-0" />
           <p className="text-[10px] text-green-300 font-mono-dm truncate">{wsLog[0]}</p>
           <span className="text-[9px] text-ink-500 flex-shrink-0">{wsLog.length} events</span>
@@ -446,7 +446,7 @@ export default function KitchenDisplayPage() {
 
                 <div className={`h-1.5 rounded-t-3xl ${STRIP[order.status]}`} />
 
-                <div className="flex items-start justify-between px-4 py-3.5 border-b border-ink-100">
+                <div className="flex items-start justify-between px-4 py-3.5 border-b border-[#14b8a6]">
                   <div>
                     <div className="flex items-center gap-2">
                       <p className="font-mono-dm text-[13px] font-semibold text-ink-800">#{order.id}</p>
@@ -495,7 +495,7 @@ export default function KitchenDisplayPage() {
                   </div>
                 )}
 
-                <div className="flex gap-2 px-4 py-3 border-t border-ink-100">
+                <div className="flex gap-2 px-4 py-3 border-t border-[#14b8a6]">
                   {BTN_CFG[order.status].map((btn, i) => (
                     <button key={btn.label}
                       onClick={() => i === 0 && advanceOrder(order.id)}

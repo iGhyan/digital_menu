@@ -11,7 +11,7 @@ const ARViewer = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-[400px] flex items-center justify-center gap-3 bg-ink-50 rounded-3xl border border-ink-100">
+      <div className="w-full h-[400px] flex items-center justify-center gap-3 bg-ink-50 rounded-3xl bg-[#14b8a60f] border border-[#14b8a6]0">
         <Loader2 size={20} className="animate-spin text-brand-400" />
         <span className="text-[13px] text-ink-400">Loading AR viewer…</span>
       </div>
@@ -75,9 +75,9 @@ export default function ARPageClient({ restaurantId, itemId, itemName, emoji, pr
     <main className="min-h-dvh bg-black flex flex-col items-center">
       <div className="phone-shell">
         {/* Nav */}
-        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-ink-100">
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[#14b8a6]">
           <button onClick={() => router.back()}
-            className="w-9 h-9 rounded-xl bg-ink-50 border border-ink-200 flex items-center justify-center">
+            className="w-9 h-9 rounded-xl bg-ink-50 border border-[#14b8a6] flex items-center justify-center">
             <ArrowLeft size={16} className="text-ink-600" />
           </button>
           <div className="flex-1">
@@ -93,7 +93,7 @@ export default function ARPageClient({ restaurantId, itemId, itemName, emoji, pr
         </div>
 
         {/* Item info */}
-        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-ink-100">
+        <div className="flex items-center gap-3 px-5 py-3.5 border-b border-[#14b8a6]">
           <div className="w-12 h-12 rounded-2xl bg-brand-50 border border-brand-100 flex items-center justify-center text-2xl">
             {emoji}
           </div>
@@ -114,7 +114,7 @@ export default function ARPageClient({ restaurantId, itemId, itemName, emoji, pr
 
           {/* Loading */}
           {loading && (
-            <div className="w-full h-[320px] flex flex-col items-center justify-center gap-3 bg-ink-50 rounded-3xl border border-ink-100">
+            <div className="w-full h-[320px] flex flex-col items-center justify-center gap-3 bg-ink-50 rounded-3xl border border-[#14b8a6]">
               <div className="text-5xl opacity-30">{emoji}</div>
               <div className="flex items-center gap-2">
                 <Loader2 size={16} className="animate-spin text-brand-500" />
