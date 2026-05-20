@@ -22,12 +22,11 @@ function GuestContent() {
   const tableNum = tid.replace(/^[Tt](?:able[-_]?)?/, '').replace(/\D/g, '') || '—';
 
   const [zone,           setZone]           = useState('Main Hall');
-  const [restaurantName, setRestaurantName] = useState('La Maison');
+  const [restaurantName, setRestaurantName] = useState('Das Pardes');
   const [tagline,        setTagline]        = useState('Fine Dining Experience');
   const [loadingInfo,    setLoadingInfo]    = useState(true);
 
   useEffect(() => {
-    // Derive zone from table number
     const n = parseInt(tableNum, 10);
     if (n >= 9 && n <= 10) setZone('Garden Terrace');
     else if (n >= 11)      setZone('Private Dining');
@@ -142,20 +141,7 @@ function GuestContent() {
             </div>
           )}
 
-          {/* Feature grid */}
-          <div className="grid grid-cols-4 gap-2 mb-6">
-            {[
-              { icon: '📖', label: 'Menu'    },
-              { icon: '🛒', label: 'Order'   },
-              { icon: '📡', label: 'Track'   },
-              { icon: '🫙', label: 'AR View' },
-            ].map(f => (
-              <div key={f.label} className="flex flex-col items-center gap-1.5 p-3 rounded-2xl bg-[#14b8a60f] ">
-                <span className="text-xl">{f.icon}</span>
-                <span className="text-[10px] text-ink-500 font-medium text-center">{f.label}</span>
-              </div>
-            ))}
-          </div>
+       
         </div>
 
         {/* Footer CTAs */}
@@ -171,7 +157,7 @@ function GuestContent() {
             <Leaf size={15} />
             View Allergen Guide
           </button>
-          <div className="flex justify-center gap-4 mt-1">
+          {/* <div className="flex justify-center gap-4 mt-1">
             {['EN', 'اردو', 'FR', 'AR'].map((l, i) => (
               <button key={l} className={`text-xs font-medium transition-colors ${
                 i === 0 ? 'text-brand-600' : 'text-ink-300 hover:text-brand-500'
@@ -179,9 +165,25 @@ function GuestContent() {
                 {l}
               </button>
             ))}
-          </div>
+          </div> */}
+        </div>
+
+         <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.05] bg-[#14b8a60f]">
+          {[
+            { icon: '🏠', label: 'Home',   href: '/guest' },
+            { icon: '📖', label: 'Menu',   href: '/guest/menu', active: true },
+            { icon: '🛒', label: 'Cart',   href: '/guest/cart' },
+            { icon: '🕐', label: 'Orders', href: '/guest/tracking' },
+          ].map(n => (
+            <Link key={n.label} href={n.href}
+              className={`flex flex-col items-center gap-1 px-2.5 py-1 ${n.active ? 'text-gold-400' : 'text-white/20'}`}>
+              <span className="text-[20px]">{n.icon}</span>
+              <span className="text-[10px] font-medium">{n.label}</span>
+            </Link>
+          ))}
         </div>
       </div>
+      
     </main>
   );
 }
