@@ -10,17 +10,17 @@ import {
 
 const NAV = [
   { section: 'Main', items: [
-    { href: '/admin/dashboard', label: 'Dashboard',      icon: LayoutDashboard },
-    { href: '/admin/menu',      label: 'Menu Management', icon: BookOpen },
-    { href: '/admin/qr',        label: 'QR Codes',        icon: QrCode },
-    { href: '/admin/dashboard', label: 'Kitchen Orders',  icon: ChefHat, badge: '7' },
+    { href: '/admin/dashboard', label: 'Dashboard',       icon: LayoutDashboard },
+    { href: '/admin/menu',      label: 'Menu Management', icon: BookOpen        },
+    { href: '/admin/qr',        label: 'QR Codes',        icon: QrCode          },
+    { href: '/admin/orders',    label: 'Kitchen Orders',  icon: ChefHat         },
   ]},
   { section: 'Reports', items: [
-    { href: '/admin/dashboard', label: 'Analytics',      icon: BarChart2 },
-    { href: '/admin/dashboard', label: 'Orders History', icon: Receipt },
+    { href: '/admin/dashboard', label: 'Analytics',       icon: BarChart2 },
+    { href: '/admin/history',   label: 'Orders History',  icon: Receipt   },
   ]},
   { section: 'Admin', items: [
-    { href: '/admin/users',     label: 'User Management', icon: Users },
+    { href: '/admin/users',     label: 'User Management', icon: Users    },
     { href: '/admin/dashboard', label: 'Settings',        icon: Settings },
   ]},
 ];
@@ -49,21 +49,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                 {group.section}
               </p>
               {group.items.map((item) => {
-                const Icon = item.icon;
-                const active = pathname === item.href;
+                const Icon   = item.icon;
+                const active = pathname === item.href ||
+                  (item.href !== '/admin/dashboard' && pathname.startsWith(item.href));
                 return (
-                  <Link
-                    key={item.label}
-                    href={item.href}
-                    className={`sb-item ${active ? 'active' : ''} mb-0.5`}
-                  >
+                  <Link key={item.label} href={item.href}
+                    className={`sb-item ${active ? 'active' : ''} mb-0.5`}>
                     <Icon size={17} />
                     <span className="flex-1">{item.label}</span>
-                    {item.badge && (
-                      <span className="bg-red-500/15 border border-red-500/25 rounded-full px-1.5 py-0.5 text-[10px] text-red-400">
-                        {item.badge}
-                      </span>
-                    )}
                   </Link>
                 );
               })}
