@@ -6,12 +6,10 @@
 // ── Environment variables ──────────────────────────────────────────────────────
 // Set these in .env.local (local) and Vercel dashboard (production)
 export const RESTAURANT_ID =
-  process.env.NEXT_PUBLIC_RESTAURANT_ID
-  || '53591ab9-ac4e-4841-958b-d38853a90f0b'; // menu restaurant ID
+  process.env.NEXT_PUBLIC_RESTAURANT_ID;
 
 export const TENANT_ID =
-  process.env.NEXT_PUBLIC_TENANT_ID
-  || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'; // default tenant
+  process.env.NEXT_PUBLIC_TENANT_ID;
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ??
@@ -75,8 +73,8 @@ export async function apiFetch<T>(
 // ── Orders (KDS) endpoints ─────────────────────────────────────────────────────
 export const ORDERS_API_BASE = 'https://rz0z72aem4.execute-api.us-east-1.amazonaws.com/Prod';
 
-export const TENANT_ID_KDS    = process.env.NEXT_PUBLIC_TENANT_ID_KDS    ?? 't123';
-export const RESTAURANT_ID_KDS = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS ?? 'r456';
+export const TENANT_ID_KDS    = process.env.NEXT_PUBLIC_TENANT_ID_KDS;
+export const RESTAURANT_ID_KDS = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS;
 
 export const ORDERS_API = {
   /** GET all orders */

@@ -48,8 +48,8 @@ export default function CartPage() {
       const tid = sessionStorage.getItem('lm_tid') ?? tableId ?? 'table-01';
 
       const payload = {
-        tenantId:              process.env.NEXT_PUBLIC_TENANT_ID_KDS     ?? 't123',
-        restaurantId:          process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS ?? 'r456',
+        tenantId:              process.env.NEXT_PUBLIC_TENANT_ID_KDS,
+        restaurantId:          process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS,
         tableId:               tid,
         currencyCode:          'PKR',
         totalAmountMinorUnits: Math.round(grandTotal * 100),

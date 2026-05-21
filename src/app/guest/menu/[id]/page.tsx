@@ -15,8 +15,8 @@ const TAG_STYLES: Record<string, string> = {
   chef:    'bg-amber-50 border border-amber-200 text-amber-700',
 };
 
-const TENANT_ID     = process.env.NEXT_PUBLIC_TENANT_ID_KDS     ?? 't123';
-const RESTAURANT_ID = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS ?? 'r456';
+const TENANT_ID     = process.env.NEXT_PUBLIC_TENANT_ID_KDS;
+const RESTAURANT_ID = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS;
 
 export default function ItemDetailPage() {
   const { id }  = useParams<{ id: string }>();
