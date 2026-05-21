@@ -2,7 +2,7 @@
  * Menu API service
  */
 
-import { MENU_API, apiFetch, RESTAURANT_ID, ADMIN_RESTAURANT_ID } from './api-config';
+import { MENU_API, AR_API, apiFetch, RESTAURANT_ID, ADMIN_RESTAURANT_ID } from './api-config';
 
 export interface ApiMenuItem {
   id:          string;
@@ -55,7 +55,19 @@ export async function fetchMenuItems(restaurantId?: string): Promise<ApiMenuItem
 
 export async function fetchMenuItem(itemId: string, restaurantId?: string): Promise<ApiMenuItem> {
   const rid = (restaurantId && restaurantId.trim()) ? restaurantId.trim() : RESTAURANT_ID;
-  return apiFetch<ApiMenuItem>(MENU_API.item(itemId, rid));
+
+  // Step 1: menu-lambda se item fetch karo
+  const item = await apiFetch<any>(MENU_API.item(itemId, rid));
+
+  // Step 2: ar-assets-lambda se presigned arModelUrl fetch karo
+  try {
+    const arData = await apiFetch<any>(AR_API.model(itemId, rid));
+    // arData.presignedUrl — download URL for existing AR model
+    return normaliseItem({ ...item, arModelUrl: arData.presignedUrl });
+  } catch {
+    // AR model exist nahi karta — theek hai, sirf item return karo
+    return normaliseItem(item);
+  }
 }
 
 export async function createMenuItem(payload: Partial<ApiMenuItem>): Promise<ApiMenuItem> {

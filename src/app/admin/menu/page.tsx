@@ -10,11 +10,11 @@ import { Toggle, StatusChip } from '@/components/ui';
 import {
   fetchMenuItems,
   fetchMenuItem,
-  createMenuItem,
   updateMenuItem,
   normaliseItem,
   type ApiMenuItem,
 } from '@/lib/menu-api';
+import { TENANT_ID } from '@/lib/api-config';
 
 type ModalState = { open: boolean; item?: ApiMenuItem };
 type LoadState  = 'idle' | 'loading' | 'success' | 'error';
@@ -26,6 +26,45 @@ const STATS_LABELS = [
 ];
 
 const ADMIN_RESTAURANT_ID = process.env.NEXT_PUBLIC_ADMIN_RESTAURANT_ID ?? '2687382e-3b00-4f57-9014-f484df89e3fe';
+const MENU_BASE_URL = process.env.NEXT_PUBLIC_MENU_API_URL ?? 'https://g1ou0w5x4m.execute-api.ap-south-1.amazonaws.com/dev/menus';
+
+// ── createMenuItem via FormData (image + glb in one POST) ──────────────────
+async function createMenuItemWithFiles(
+  payload: {
+    name: string; description: string; price: number;
+    categoryId: string; isActive: boolean;
+    allergens?: string[]; prepTime?: string; calories?: number;
+  },
+  imageFile?: File | null,
+  glbFile?: File | null,
+): Promise<any> {
+  const fd = new FormData();
+  fd.append('name',            payload.name);
+  fd.append('description',     payload.description);
+  fd.append('priceMinorUnits', String(Math.round(payload.price * 100)));
+  fd.append('categoryId',      payload.categoryId);
+  fd.append('isActive',        String(payload.isActive));
+  if (payload.allergens?.length) fd.append('allergens', payload.allergens.join(','));
+  if (payload.prepTime)  fd.append('prepTime', payload.prepTime);
+  if (payload.calories)  fd.append('calories',  String(payload.calories));
+  if (imageFile)         fd.append('file',      imageFile);   // menu-lambda image field
+  if (glbFile)           fd.append('arFile',    glbFile);     // menu-lambda AR field
+
+  const res = await fetch(
+    `${MENU_BASE_URL}/restaurants/${ADMIN_RESTAURANT_ID}/items`,
+    {
+      method: 'POST',
+      headers: { 'X-Tenant-Id': TENANT_ID },
+      // NO Content-Type — browser sets multipart/form-data boundary automatically
+      body: fd,
+    }
+  );
+  if (!res.ok) {
+    const txt = await res.text().catch(() => res.statusText);
+    throw new Error(`Create failed (${res.status}): ${txt}`);
+  }
+  return res.json();
+}
 
 export default function AdminMenuPage() {
   const [items,      setItems]      = useState<ApiMenuItem[]>([]);
@@ -48,7 +87,6 @@ export default function AdminMenuPage() {
   const [glbName,    setGlbName]    = useState<string | null>(null);
   const [glbStatus,  setGlbStatus]  = useState<GlbStatus>('idle');
   const [glbError,   setGlbError]   = useState('');
-  const [glbProgress,setGlbProgress]= useState(0);
 
   const [form, setForm] = useState({
     name: '', description: '', price: '', category: '',
@@ -96,7 +134,7 @@ export default function AdminMenuPage() {
     setIsChef(item ? (item.tags ?? []).includes('chef') : false);
     setUploadFile(null); setUploadName(null);
     setGlbFile(null); setGlbName(null);
-    setGlbStatus('idle'); setGlbError(''); setGlbProgress(0);
+    setGlbStatus('idle'); setGlbError('');
     setSaveMsg(''); setSaveErr('');
     setForm({
       name:        item?.name        ?? '',
@@ -108,6 +146,7 @@ export default function AdminMenuPage() {
     });
   };
 
+  // S3 presigned PUT upload (for image on existing items)
   const uploadToS3 = async (url: string, file: File, ct: string) => {
     const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': ct }, body: file });
     if (!res.ok) throw new Error(`S3 upload failed (${res.status})`);
@@ -118,59 +157,71 @@ export default function AdminMenuPage() {
     if (!form.category) { setSaveErr('Please select a category.'); return; }
     setSaving(true); setSaveMsg(''); setSaveErr('');
 
-    const payload: Partial<ApiMenuItem> = {
-      name: form.name.trim(), description: form.description.trim(),
-      price: parseFloat(form.price), categoryId: form.category,
-      status: isActive ? 'active' : 'inactive',
-      tags: isChef ? ['chef'] : [],
-      prepTime: form.prepTime || '20 min',
-      calories: form.calories ? parseInt(form.calories) : undefined,
-    };
-
     try {
-      let raw: any;
-
       if (modal.item?.id) {
+        // ── UPDATE existing item ────────────────────────────────────────────
         const version = (modal.item as any).version ?? 1;
-        raw = await updateMenuItem(modal.item.id, payload, version);
+        const raw = await updateMenuItem(modal.item.id, {
+          name:        form.name.trim(),
+          description: form.description.trim(),
+          price:       parseFloat(form.price),
+          categoryId:  form.category,
+          status:      isActive ? 'active' : 'inactive',
+          tags:        isChef ? ['chef'] : [],
+          prepTime:    form.prepTime || '20 min',
+          calories:    form.calories ? parseInt(form.calories) : undefined,
+        }, version);
         setItems(prev => prev.map(i => i.id === (raw.id ?? raw.itemId) ? normaliseItem(raw) : i));
-        setSaveMsg('Item updated successfully!');
-      } else {
-        raw = await createMenuItem(payload);
-        setItems(prev => [...prev, normaliseItem(raw)]);
-        setSaveMsg('Item created!');
+        setSaveMsg('Item updated!');
 
-        if (uploadFile || glbFile) {
-          setSaveMsg('Getting upload URLs…');
-          // GET the item directly — GET returns presigned imageUrl + arModelUrl, PUT does not
-          const { fetchMenuItem } = await import('@/lib/menu-api');
-          const itemId = raw.itemId ?? raw.id;
-          const fetched = await fetchMenuItem(itemId, ADMIN_RESTAURANT_ID) as any;
-          raw = { ...raw, ...fetched };
-          const nr = normaliseItem(raw);
-          setItems(prev => prev.map(i => i.id === nr.id ? nr : i));
-          setModal(prev => ({ ...prev, item: nr }));
+        // Image upload on existing item via presigned URL
+        if (uploadFile) {
+          setSaveMsg('Getting image upload URL…');
+          const fetched = await fetchMenuItem(modal.item.id, ADMIN_RESTAURANT_ID) as any;
+          if (fetched.imageUrl) {
+            setSaveMsg('Uploading image…');
+            await uploadToS3(fetched.imageUrl, uploadFile, uploadFile.type || 'image/png');
+            setSaveMsg('Image uploaded! ✓');
+          }
+        }
+
+        // GLB on existing item — no S3 slot exists, show recreate hint
+        if (glbFile && !(modal.item as any).arModelKey) {
+          setSaveErr('This item has no AR model slot. Use "Recreate & Upload Files" to create a fresh item with GLB.');
+          setSaving(false);
+          return;
+        }
+
+      } else {
+        // ── CREATE new item — one FormData POST with image + glb ────────────
+        setSaveMsg('Creating item…');
+        if (glbFile) { setGlbStatus('uploading'); setSaveMsg('Uploading item + 3D model…'); }
+
+        const raw = await createMenuItemWithFiles(
+          {
+            name:        form.name.trim(),
+            description: form.description.trim(),
+            price:       parseFloat(form.price),
+            categoryId:  form.category,
+            isActive:    isActive,
+            prepTime:    form.prepTime || undefined,
+            calories:    form.calories ? parseInt(form.calories) : undefined,
+          },
+          uploadFile,
+          glbFile,
+        );
+
+        setItems(prev => [...prev, normaliseItem(raw)]);
+
+        if (raw.arModelKey) {
+          setGlbStatus('approved');
+          setSaveMsg('Item created with 3D model! ✓');
+        } else {
+          setSaveMsg('Item created!');
         }
       }
 
-      if (uploadFile && raw.imageUrl) {
-        setSaveMsg('Uploading image…');
-        await uploadToS3(raw.imageUrl, uploadFile, uploadFile.type || 'image/png');
-        setSaveMsg('Image uploaded! ✓');
-        setTimeout(() => loadItems(), 1500);
-      }
-
-      if (glbFile && raw.arModelUrl) {
-        setSaveMsg('Uploading 3D model…');
-        setGlbStatus('uploading'); setGlbProgress(50);
-        await uploadToS3(raw.arModelUrl, glbFile, 'model/gltf-binary');
-        setGlbProgress(100); setGlbStatus('approved');
-        setSaveMsg('3D model uploaded!');
-        setTimeout(() => loadItems(), 1000);
-        return;
-      }
-
-      setTimeout(() => { setModal({ open: false }); setSaveMsg(''); }, 1200);
+      setTimeout(() => { setModal({ open: false }); loadItems(); setSaveMsg(''); }, 1400);
     } catch (err: any) {
       setSaveErr(err?.message ?? 'Save failed.');
       if (glbStatus === 'uploading') { setGlbStatus('error'); setGlbError(err?.message ?? 'Upload failed'); }
@@ -183,7 +234,6 @@ export default function AdminMenuPage() {
     if (!confirm('Remove this item from the menu?')) return;
     setDeleting(id);
     try {
-      const { fetchMenuItem } = await import('@/lib/menu-api');
       const latest = await fetchMenuItem(id, ADMIN_RESTAURANT_ID) as any;
       await updateMenuItem(id, {
         name: latest.name, description: latest.description ?? '',
@@ -199,12 +249,12 @@ export default function AdminMenuPage() {
     }
   };
 
+  // Recreate: deactivate old → fresh POST with files
   const handleRecreate = async () => {
     if (!modal.item) return;
     if (!confirm('Deactivate old item and create fresh with files? Continue?')) return;
     setSaving(true); setSaveErr(''); setSaveMsg('Deactivating old item…');
     try {
-      const { fetchMenuItem } = await import('@/lib/menu-api');
       const latest = await fetchMenuItem(modal.item.id, ADMIN_RESTAURANT_ID) as any;
       await updateMenuItem(modal.item.id, {
         name: latest.name, description: latest.description ?? '',
@@ -213,35 +263,32 @@ export default function AdminMenuPage() {
         status: 'inactive',
       }, latest.version ?? 1);
       setItems(prev => prev.filter(i => i.id !== modal.item!.id));
-      setSaveMsg('Creating fresh item…');
-      let raw: any = await createMenuItem({
-        name: form.name.trim(), description: form.description.trim(),
-        price: parseFloat(form.price), categoryId: form.category,
-        status: 'active', tags: isChef ? ['chef'] : [],
-        prepTime: form.prepTime || '20 min',
-        calories: form.calories ? parseInt(form.calories) : undefined,
-      });
-      // GET item to get presigned imageUrl + arModelUrl (POST doesn't return them)
-      if (uploadFile || glbFile) {
-        setSaveMsg('Getting upload URLs…');
-        const fetched = await fetchMenuItem(raw.itemId ?? raw.id, ADMIN_RESTAURANT_ID) as any;
-        raw = { ...raw, ...fetched };
-      }
+
+      setSaveMsg('Creating fresh item with files…');
+      if (glbFile) setGlbStatus('uploading');
+
+      const raw = await createMenuItemWithFiles(
+        {
+          name:        form.name.trim(),
+          description: form.description.trim(),
+          price:       parseFloat(form.price),
+          categoryId:  form.category,
+          isActive:    true,
+          prepTime:    form.prepTime || undefined,
+          calories:    form.calories ? parseInt(form.calories) : undefined,
+        },
+        uploadFile,
+        glbFile,
+      );
+
       setItems(prev => [...prev, normaliseItem(raw)]);
-      setSaveMsg('Created! Uploading files…');
-      if (uploadFile && raw.imageUrl) {
-        await uploadToS3(raw.imageUrl, uploadFile, uploadFile.type || 'image/png');
-        setSaveMsg('Image uploaded!');
-      }
-      if (glbFile && raw.arModelUrl) {
-        setGlbStatus('uploading'); setGlbProgress(50);
-        await uploadToS3(raw.arModelUrl, glbFile, 'model/gltf-binary');
-        setGlbProgress(100); setGlbStatus('approved');
-        setSaveMsg('3D model uploaded!');
-      }
+      if (raw.arModelKey) { setGlbStatus('approved'); setSaveMsg('Recreated with 3D model! ✓'); }
+      else setSaveMsg('Recreated! ✓');
+
       setTimeout(() => { setModal({ open: false }); loadItems(); }, 1500);
     } catch (err: any) {
       setSaveErr(err?.message ?? 'Recreate failed.');
+      if (glbStatus === 'uploading') { setGlbStatus('error'); setGlbError(err?.message ?? 'Failed'); }
     } finally {
       setSaving(false);
     }
@@ -353,7 +400,7 @@ export default function AdminMenuPage() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <p className="text-[13px] font-semibold text-ink-900 truncate">{item.name}</p>
-                    {(item as any).hasArModel && (
+                    {(item as any).arModelKey && (
                       <span className="text-[9px] bg-purple-100 border border-purple-200 text-purple-600 px-1.5 py-0.5 rounded-full font-bold flex-shrink-0">3D</span>
                     )}
                   </div>
@@ -368,7 +415,7 @@ export default function AdminMenuPage() {
                     className="w-7 h-7 rounded-lg bg-ink-50 border border-ink-200 flex items-center justify-center hover:bg-brand-50 hover:border-brand-200 transition-all">
                     <Edit2 size={12} className="text-ink-400" />
                   </button>
-                  <button onClick={() => handleDelete(item.id)} disabled={deleting === item.id} title="Remove item"
+                  <button onClick={() => handleDelete(item.id)} disabled={deleting === item.id}
                     className="w-7 h-7 rounded-lg bg-ink-50 border border-ink-200 flex items-center justify-center hover:bg-red-50 hover:border-red-200 transition-all disabled:opacity-50">
                     {deleting === item.id ? <Loader2 size={12} className="animate-spin text-ink-400" /> : <Trash2 size={12} className="text-ink-400" />}
                   </button>
@@ -468,19 +515,16 @@ export default function AdminMenuPage() {
                   <span className={`text-[12px] font-medium ${glbName ? 'text-purple-700' : 'text-ink-400'}`}>
                     {glbName ? `✓ ${glbName}` : 'Click to upload · .glb / .gltf'}
                   </span>
-                  {glbName && <span className="text-[11px] text-purple-500">Uploads to S3 when you save</span>}
+                  {glbName && !modal.item && <span className="text-[11px] text-purple-500">Will upload with item on Save</span>}
+                  {glbName && modal.item && <span className="text-[11px] text-amber-500">Use Recreate button below to attach GLB</span>}
                 </label>
               )}
 
               {glbStatus === 'uploading' && (
                 <div className="p-4 rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/30">
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2">
                     <Loader2 size={13} className="animate-spin text-purple-500" />
-                    <span className="text-[12px] text-purple-700 font-medium">Uploading to S3…</span>
-                    <span className="ml-auto text-[11px] text-purple-500">{Math.round(glbProgress)}%</span>
-                  </div>
-                  <div className="h-1.5 bg-purple-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-purple-500 rounded-full transition-all duration-300" style={{ width: `${glbProgress}%` }} />
+                    <span className="text-[12px] text-purple-700 font-medium">{saveMsg || 'Uploading 3D model…'}</span>
                   </div>
                 </div>
               )}
@@ -507,12 +551,11 @@ export default function AdminMenuPage() {
               )}
             </div>
 
-            {/* Recreate button — for existing items without S3 slot */}
-            {modal.item && (uploadFile || glbFile) &&
-             (!(modal.item as any).imageKey || !(modal.item as any).arModelKey) && (
+            {/* Recreate — for existing items that need GLB */}
+            {modal.item && glbFile && (
               <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
                 <p className="text-[11px] text-amber-700 font-semibold mb-2">
-                  ⚠ This item has no S3 slot for {!( modal.item as any).imageKey ? 'image' : '3D model'}. Recreate to upload files.
+                  ⚠ GLB upload requires recreating the item (menu-lambda handles AR upload on POST only).
                 </p>
                 <button onClick={handleRecreate} disabled={saving}
                   className="w-full h-9 rounded-xl bg-amber-500 text-white text-[12px] font-semibold flex items-center justify-center gap-1.5 hover:bg-amber-600 disabled:opacity-60">
@@ -532,7 +575,7 @@ export default function AdminMenuPage() {
 
             <div className="mt-3 p-3 bg-ink-50 border border-ink-100 rounded-xl">
               <p className="text-[10px] text-ink-400 uppercase tracking-widest font-semibold mb-1.5">{modal.item ? 'PUT' : 'POST'} Payload Preview</p>
-              <p className="text-[10px] text-ink-500 break-all">{`{ name: "${form.name||'…'}", price: ${form.price||0}, categoryId: "${form.category.slice(0,8)}…", status: "${isActive?'active':'inactive'}" }`}</p>
+              <p className="text-[10px] text-ink-500 break-all">{`{ name: "${form.name||'…'}", price: ${form.price||0}, categoryId: "${form.category.slice(0,8)}…", status: "${isActive?'active':'inactive'}"${glbFile ? ', arFile: ✓' : ''} }`}</p>
             </div>
 
             <div className="flex gap-2 mt-4">

@@ -16,6 +16,11 @@ export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ??
   'https://g1ou0w5x4m.execute-api.ap-south-1.amazonaws.com/dev';
 
+// ar-assets-lambda has a separate API Gateway endpoint
+export const AR_BASE =
+  process.env.NEXT_PUBLIC_AR_BASE ??
+  'https://987eskfgd8.execute-api.ap-south-1.amazonaws.com/Prod';
+
 if (typeof window !== 'undefined') {
   if (!RESTAURANT_ID) console.warn('[API] NEXT_PUBLIC_RESTAURANT_ID is not set');
   if (!TENANT_ID)     console.warn('[API] NEXT_PUBLIC_TENANT_ID is not set');
@@ -30,7 +35,7 @@ export const MENU_API = {
 
 export const AR_API = {
   model: (itemId: string, rid = RESTAURANT_ID) =>
-    `${API_BASE}/ar/${rid}/${itemId}`,
+    `${AR_BASE}/ar/${rid}/${itemId}`,
 };
 
 export const QR_API = {
