@@ -30,17 +30,21 @@ function MenuContent() {
   const [activeCategory, setActiveCategory] = useState('all');
   const [search,         setSearch]         = useState('');
   const [added,          setAdded]          = useState<Record<string, boolean>>({});
+  const [tableLabel,     setTableLabel]     = useState('La Maison'); // SSR-safe
   const { addItem, itemCount } = useCartStore();
 
   useEffect(() => {
-    // Store QR rid in session (for AR and order tracking)
+    // Client-only: read sessionStorage after mount to avoid hydration mismatch
+    const storedTable = sessionStorage.getItem('lm_table');
+    if (storedTable) setTableLabel(`Table ${storedTable} · La Maison`);
+
+    // Store QR params in session
     const urlRid = params.get('rid') || '';
-    if (urlRid && typeof window !== 'undefined') sessionStorage.setItem('lm_rid', urlRid);
+    const urlTid = params.get('tid') || '';
+    if (urlRid) sessionStorage.setItem('lm_rid', urlRid);
+    if (urlTid) sessionStorage.setItem('lm_tid', urlTid);
 
-    // Always use env var restaurant ID for menu API
-    // The QR rid identifies the restaurant session but menu items belong to NEXT_PUBLIC_RESTAURANT_ID
-    const menuRid = process.env.NEXT_PUBLIC_RESTAURANT_ID || '53591ab9-ac4e-4841-958b-d38853a90f0b';
-
+    const menuRid = process.env.NEXT_PUBLIC_RESTAURANT_ID || '2687382e-3b00-4f57-9014-f484df89e3fe';
     fetchMenuItems(menuRid)
       .then(raw => { setItems(raw.map(normaliseItem)); setLoading(false); })
       .catch(e => { setError(e?.message ?? 'Failed to load menu'); setLoading(false); });
@@ -74,7 +78,7 @@ function MenuContent() {
         <div className="flex items-center justify-between p-8">
           <div>
             <p className="text-[11px] text-white/30 uppercase tracking-widest">
-              {typeof window !== 'undefined' ? `Table ${sessionStorage.getItem('lm_table') ?? '—'} · La Maison` : 'La Maison'}
+              {tableLabel}
             </p>
             <h1 className="font-serif text-[22px] text-[#f5e9d0] font-semibold">Our Menu</h1>
           </div>
@@ -187,7 +191,7 @@ function MenuContent() {
             { icon: '🕐', label: 'Orders', href: '/guest/tracking' },
           ].map(n => (
             <Link key={n.label} href={n.href}
-              className={`flex flex-col items-center gap-1 px-2.5 py-1 ${n.active ? 'text-gold-400' : 'text-white/20'}`}>
+              className={`flex flex-col items-center gap-1 px-2.5 py-1 ${(n as any).active ? 'text-gold-400' : 'text-white/20'}`}>
               <span className="text-[20px]">{n.icon}</span>
               <span className="text-[10px] font-medium">{n.label}</span>
             </Link>
