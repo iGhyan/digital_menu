@@ -1,11 +1,9 @@
 /**
  * Menu API service
- * Typed wrappers around the AWS API Gateway menu endpoints.
  */
 
-import { MENU_API, apiFetch, RESTAURANT_ID } from './api-config';
+import { MENU_API, apiFetch, RESTAURANT_ID, ADMIN_RESTAURANT_ID } from './api-config';
 
-// ── API response types ─────────────────────────────────────────────────────────
 export interface ApiMenuItem {
   id:          string;
   name:        string;
@@ -42,92 +40,69 @@ export interface ApiMenuResponse {
   page?:  number;
 }
 
-// ── GET all items ──────────────────────────────────────────────────────────────
 export async function fetchMenuItems(restaurantId?: string): Promise<ApiMenuItem[]> {
   try {
-    // Priority: passed param → env/config (RESTAURANT_ID already has fallback in api-config.ts)
     const rid = (restaurantId && restaurantId.trim()) ? restaurantId.trim() : RESTAURANT_ID;
-    console.log('[Menu API] fetchMenuItems rid:', rid);
     const data = await apiFetch<ApiMenuResponse | ApiMenuItem[]>(MENU_API.items(rid));
-    // Handle both { items: [...] } and [...] response shapes
     let items: any[] = [];
     if (Array.isArray(data)) items = data;
-    else if (data && 'items' in data) items = data.items;
-
-    // Debug — shows exact API field names in browser console
-    if (items.length > 0) {
-      console.log('[API] Response shape — keys:', Object.keys(items[0]));
-      console.log('[API] First item raw:', JSON.stringify(items[0], null, 2));
-    }
-
+    else if (data && 'items' in data) items = (data as ApiMenuResponse).items;
     return items.map(normaliseItem);
   } catch (err) {
-    console.error('[Menu API] fetchMenuItems error:', err);
     throw err;
   }
 }
 
-// ── GET item by ID ─────────────────────────────────────────────────────────────
 export async function fetchMenuItem(itemId: string, restaurantId?: string): Promise<ApiMenuItem> {
   const rid = (restaurantId && restaurantId.trim()) ? restaurantId.trim() : RESTAURANT_ID;
   return apiFetch<ApiMenuItem>(MENU_API.item(itemId, rid));
 }
 
-// ── POST create item ───────────────────────────────────────────────────────────
-export async function createMenuItem(
-  payload: Partial<ApiMenuItem>,
-): Promise<ApiMenuItem> {
-  const { price, ...rest } = payload as any;
+export async function createMenuItem(payload: Partial<ApiMenuItem>): Promise<ApiMenuItem> {
+  const { price, status, ...rest } = payload as any;
   const apiPayload = {
     ...rest,
     priceMinorUnits: Math.round((price ?? 0) * 100),
+    ...(status != null && { isActive: status === 'active' }),
   };
-  return apiFetch<ApiMenuItem>(MENU_API.items(), {
+  return apiFetch<ApiMenuItem>(MENU_API.items(ADMIN_RESTAURANT_ID), {
     method: 'POST',
     body:   JSON.stringify(apiPayload),
   });
 }
 
-// ── PUT update item ────────────────────────────────────────────────────────────
 export async function updateMenuItem(
-  itemId:  string,
-  payload: Partial<ApiMenuItem>,
+  itemId:   string,
+  payload:  Partial<ApiMenuItem>,
   version?: number,
 ): Promise<ApiMenuItem> {
-  const { price, ...rest } = payload as any;
+  const { price, status, ...rest } = payload as any;
   const apiPayload = {
     ...rest,
     priceMinorUnits: Math.round((price ?? 0) * 100),
+    ...(status != null && { isActive: status === 'active' }),
     ...(version != null && { version }),
   };
-  return apiFetch<ApiMenuItem>(MENU_API.item(itemId), {
+  return apiFetch<ApiMenuItem>(MENU_API.item(itemId, ADMIN_RESTAURANT_ID), {
     method: 'PUT',
     body:   JSON.stringify(apiPayload),
   });
 }
 
-// ── DELETE item ────────────────────────────────────────────────────────────────
 export async function deleteMenuItem(itemId: string): Promise<void> {
-  await apiFetch<void>(MENU_API.item(itemId), { method: 'DELETE' });
+  await apiFetch<void>(MENU_API.item(itemId, ADMIN_RESTAURANT_ID), { method: 'DELETE' });
 }
 
-// ── Normalise API item → local shape ──────────────────────────────────────────
-// Maps API fields to whatever your UI expects
 export function normaliseItem(raw: any): ApiMenuItem {
-  // id: API returns itemId
   const id = raw.id ?? raw.itemId ?? raw.item_id ?? raw._id ?? crypto.randomUUID();
 
-  // price: API returns priceMinorUnits (in cents) → convert to major units
-  const priceRaw = raw.price ?? raw.priceMinorUnits ?? raw.unitPrice ?? 0;
   const price = raw.priceMinorUnits != null
     ? Number(raw.priceMinorUnits) / 100
-    : Number(priceRaw);
+    : Number(raw.price ?? raw.unitPrice ?? 0);
 
-  // status: API returns isActive boolean
   const status: 'active' | 'inactive' | 'draft' =
     raw.status ?? (raw.isActive === true ? 'active' : raw.isActive === false ? 'inactive' : 'active');
 
-  // allergens: API returns string array like ["GLUTEN","DAIRY"]
   const rawAllergens = raw.allergens ?? [];
   const allergens = Array.isArray(rawAllergens) && typeof rawAllergens[0] === 'string'
     ? rawAllergens.map((a: string) => ({
@@ -137,23 +112,19 @@ export function normaliseItem(raw: any): ApiMenuItem {
       }))
     : rawAllergens;
 
-  // arModelUrl OR arModelKey = has a 3D model in S3
   const hasArModel = !!(raw.arModelUrl || raw.arModelKey);
 
-
-  // Category display: prefer categoryName, else derive from slug, else shorten UUID
+  const KNOWN_CATS: Record<string, string> = {
+    'e933848e-0d18-4e3a-b0a8-d70275c2fa54': 'Main Course',
+  };
   const rawCategory = raw.category ?? raw.categoryId ?? 'other';
   const categoryDisplay = raw.categoryName
-    ?? (rawCategory && !rawCategory.includes('-') ? rawCategory  // slug like "mains"
-    : rawCategory.split('-')[0]);                                 // first 8 chars of UUID
+    ?? KNOWN_CATS[raw.categoryId ?? '']
+    ?? (rawCategory && !rawCategory.includes('-') ? rawCategory : `Cat-${rawCategory.slice(0, 6)}`);
 
   return {
     ...raw,
-    id,
-    price,
-    status,
-    allergens,
-    hasArModel,
+    id, price, status, allergens, hasArModel,
     emoji:       raw.emoji       ?? '🍽️',
     tags:        raw.tags        ?? [],
     rating:      raw.rating      ?? 4.5,
@@ -171,36 +142,17 @@ export function normaliseItem(raw: any): ApiMenuItem {
     imageUrl:    raw.imageUrl    ?? null,
     arModelUrl:  raw.arModelUrl  ?? null,
     arModelKey:  raw.arModelKey  ?? null,
-    version:     raw.version      ?? 1,
+    imageKey:    raw.imageKey    ?? null,
+    version:     raw.version     ?? 1,
   };
 }
 
-// ── GET categories ─────────────────────────────────────────────────────────────
-export interface ApiCategory {
-  id:   string;  // UUID
-  name: string;
-  slug?: string;
-}
+export interface ApiCategory { id: string; name: string; slug?: string; }
 
 export async function fetchCategories(): Promise<ApiCategory[]> {
-  try {
-    const { API_BASE, RESTAURANT_ID, apiFetch } = await import('./api-config');
-    const url = `${API_BASE}/menus/restaurants/${RESTAURANT_ID}/categories`;
-    const data = await apiFetch<ApiCategory[] | { categories: ApiCategory[] }>(url);
-    if (Array.isArray(data) && data.length > 0) return data;
-    if ('categories' in data && (data as any).categories?.length > 0) return (data as any).categories;
-    return [];
-  } catch (err) {
-    console.error('[Menu API] fetchCategories error:', err);
-    // Categories endpoint may not exist — caller will handle empty array
-    return [];
-  }
+  return [];
 }
 
-/**
- * Extract unique categoryId values from existing menu items.
- * Used as fallback when /categories endpoint is unavailable.
- */
 export function extractCategoriesFromItems(items: ApiMenuItem[]): ApiCategory[] {
   const seen = new Map<string, string>();
   for (const item of items) {

@@ -7,7 +7,7 @@ import { MapPin, ShoppingCart, Leaf, Loader2 } from 'lucide-react';
 
 // ── Fetch restaurant name from menu items API ─────────────────────────────────
 // We read the restaurantId from the first item to confirm the restaurant
-const MENU_RID = process.env.NEXT_PUBLIC_RESTAURANT_ID || '53591ab9-ac4e-4841-958b-d38853a90f0b';
+const MENU_RID = process.env.NEXT_PUBLIC_RESTAURANT_ID || '2687382e-3b00-4f57-9014-f484df89e3fe';
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || 'https://g1ou0w5x4m.execute-api.ap-south-1.amazonaws.com/dev';
 const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID || 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 

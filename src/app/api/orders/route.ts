@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 const ORDERS_BASE   = 'https://rz0z72aem4.execute-api.us-east-1.amazonaws.com/Prod';
-const TENANT_ID     = process.env.NEXT_PUBLIC_TENANT_ID_KDS     ?? 't123';
-const RESTAURANT_ID = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS ?? 'r456';
+const TENANT_ID     = process.env.NEXT_PUBLIC_TENANT_ID_KDS;
+const RESTAURANT_ID = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS;
 
 export async function GET() {
   try {

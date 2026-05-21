@@ -15,8 +15,8 @@ const TAG_STYLES: Record<string, string> = {
   chef:    'bg-amber-50 border border-amber-200 text-amber-700',
 };
 
-const TENANT_ID     = process.env.NEXT_PUBLIC_TENANT_ID_KDS;
-const RESTAURANT_ID = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS;
+const TENANT_ID     = process.env.NEXT_PUBLIC_TENANT_ID_KDS     ?? 't123';
+const RESTAURANT_ID = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS ?? 'r456';
 
 export default function ItemDetailPage() {
   const { id }  = useParams<{ id: string }>();
@@ -42,7 +42,9 @@ export default function ItemDetailPage() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    const menuRid = process.env.NEXT_PUBLIC_RESTAURANT_ID;
+    const menuRid = process.env.NEXT_PUBLIC_ADMIN_RESTAURANT_ID
+      || process.env.NEXT_PUBLIC_RESTAURANT_ID
+      || '2687382e-3b00-4f57-9014-f484df89e3fe';
     fetchMenuItem(id, menuRid)
       .then(raw => {
         setRawItem(raw);

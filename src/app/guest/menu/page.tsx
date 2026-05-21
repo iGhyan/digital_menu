@@ -44,7 +44,10 @@ function MenuContent() {
     if (urlRid) sessionStorage.setItem('lm_rid', urlRid);
     if (urlTid) sessionStorage.setItem('lm_tid', urlTid);
 
-    const menuRid = process.env.NEXT_PUBLIC_RESTAURANT_ID;
+    // Use ADMIN_RESTAURANT_ID so guest sees same items as admin manages
+    const menuRid = process.env.NEXT_PUBLIC_ADMIN_RESTAURANT_ID
+      || process.env.NEXT_PUBLIC_RESTAURANT_ID
+      || '2687382e-3b00-4f57-9014-f484df89e3fe';
     fetchMenuItems(menuRid)
       .then(raw => { setItems(raw.map(normaliseItem)); setLoading(false); })
       .catch(e => { setError(e?.message ?? 'Failed to load menu'); setLoading(false); });
@@ -54,7 +57,12 @@ function MenuContent() {
   const categories = [
     { id: 'all', name: 'All', emoji: '🍽️' },
     ...Array.from(new Set(items.map(i => i.category).filter(Boolean)))
-      .map(cat => ({ id: cat, name: cat.charAt(0).toUpperCase() + cat.slice(1), emoji: getCategoryEmoji(cat) })),
+      .map(cat => {
+        // If category looks like a UUID fragment (e.g. "e933848e"), show readable name
+        const isUuidFrag = /^[0-9a-f]{6,8}$/i.test(cat);
+        const name = isUuidFrag ? 'All Dishes' : cat.charAt(0).toUpperCase() + cat.slice(1);
+        return { id: cat, name, emoji: getCategoryEmoji(cat) };
+      }),
   ];
 
   const filtered = items.filter(item => {
