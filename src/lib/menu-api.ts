@@ -77,9 +77,14 @@ export async function fetchMenuItem(itemId: string, restaurantId?: string): Prom
 export async function createMenuItem(
   payload: Partial<ApiMenuItem>,
 ): Promise<ApiMenuItem> {
+  const { price, ...rest } = payload as any;
+  const apiPayload = {
+    ...rest,
+    priceMinorUnits: Math.round((price ?? 0) * 100),
+  };
   return apiFetch<ApiMenuItem>(MENU_API.items(), {
     method: 'POST',
-    body:   JSON.stringify(payload),
+    body:   JSON.stringify(apiPayload),
   });
 }
 
@@ -87,10 +92,17 @@ export async function createMenuItem(
 export async function updateMenuItem(
   itemId:  string,
   payload: Partial<ApiMenuItem>,
+  version?: number,
 ): Promise<ApiMenuItem> {
+  const { price, ...rest } = payload as any;
+  const apiPayload = {
+    ...rest,
+    priceMinorUnits: Math.round((price ?? 0) * 100),
+    ...(version != null && { version }),
+  };
   return apiFetch<ApiMenuItem>(MENU_API.item(itemId), {
     method: 'PUT',
-    body:   JSON.stringify(payload),
+    body:   JSON.stringify(apiPayload),
   });
 }
 
@@ -125,8 +137,15 @@ export function normaliseItem(raw: any): ApiMenuItem {
       }))
     : rawAllergens;
 
-  // arModelUrl: if present, item has a 3D model
+  // arModelUrl OR arModelKey = has a 3D model in S3
   const hasArModel = !!(raw.arModelUrl || raw.arModelKey);
+
+
+  // Category display: prefer categoryName, else derive from slug, else shorten UUID
+  const rawCategory = raw.category ?? raw.categoryId ?? 'other';
+  const categoryDisplay = raw.categoryName
+    ?? (rawCategory && !rawCategory.includes('-') ? rawCategory  // slug like "mains"
+    : rawCategory.split('-')[0]);                                 // first 8 chars of UUID
 
   return {
     ...raw,
@@ -147,10 +166,12 @@ export function normaliseItem(raw: any): ApiMenuItem {
     subtitle:    raw.subtitle    ?? raw.subTitle ?? '',
     name:        raw.name        ?? raw.itemName ?? 'Unnamed Item',
     description: raw.description ?? raw.desc     ?? '',
-    category:    raw.category    ?? raw.categoryId ?? 'other',
+    category:    categoryDisplay,
     categoryId:  raw.categoryId  ?? raw.category  ?? '',
     imageUrl:    raw.imageUrl    ?? null,
     arModelUrl:  raw.arModelUrl  ?? null,
+    arModelKey:  raw.arModelKey  ?? null,
+    version:     raw.version      ?? 1,
   };
 }
 

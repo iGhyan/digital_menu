@@ -18,6 +18,7 @@ import {
 
 type ModalState = { open: boolean; item?: ApiMenuItem };
 type LoadState  = 'idle' | 'loading' | 'success' | 'error';
+type GlbStatus  = 'idle' | 'uploading' | 'validating' | 'approved' | 'rejected' | 'error';
 
 const STATS_LABELS = [
   { label: 'Total Items', key: 'total',    color: 'text-ink-700'   },
@@ -28,6 +29,7 @@ const STATS_LABELS = [
 
 export default function AdminMenuPage() {
   const [items,      setItems]      = useState<ApiMenuItem[]>([]);
+  const [cats,       setCats]       = useState<{id:string; name:string}[]>([]);
   const [loadState,  setLoadState]  = useState<LoadState>('idle');
   const [loadError,  setLoadError]  = useState('');
   const [search,     setSearch]     = useState('');
@@ -38,8 +40,18 @@ export default function AdminMenuPage() {
   const [saving,     setSaving]     = useState(false);
   const [saveMsg,    setSaveMsg]    = useState('');
   const [saveErr,    setSaveErr]    = useState('');
-  const [uploadName, setUploadName] = useState<string | null>(null);
   const [deleting,   setDeleting]   = useState<string | null>(null);
+
+  // Image upload state
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadName, setUploadName] = useState<string | null>(null);
+
+  // GLB upload state
+  const [glbFile,     setGlbFile]     = useState<File | null>(null);
+  const [glbName,     setGlbName]     = useState<string | null>(null);
+  const [glbStatus,   setGlbStatus]   = useState<GlbStatus>('idle');
+  const [glbError,    setGlbError]    = useState('');
+  const [glbProgress, setGlbProgress] = useState(0);
 
   const [form, setForm] = useState({
     name: '', description: '', price: '', category: 'starters',
@@ -52,7 +64,22 @@ export default function AdminMenuPage() {
     setLoadError('');
     try {
       const raw = await fetchMenuItems();
-      setItems(raw.map(normaliseItem));
+      const normalised = raw.map(normaliseItem);
+      setItems(normalised);
+      // Extract unique categoryId UUIDs from real API items
+      const seen = new Map<string, string>();
+      raw.forEach((r: any) => {
+        const id   = r.categoryId ?? '';
+        // Use categoryName if available, else use category slug, else shorten UUID
+        const name = r.categoryName ?? (r.category && !r.category.includes('-') ? r.category : `Category ${id.slice(0,6)}`);
+        if (id && id.includes('-')) seen.set(id, name); // only UUIDs
+      });
+      if (seen.size > 0) {
+        const catList = Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
+        setCats(catList);
+        // If modal is open with empty category, set default
+        setForm(prev => prev.category === '' ? { ...prev, category: catList[0]?.id ?? '' } : prev);
+      }
       setLoadState('success');
     } catch (err: any) {
       setLoadError(err?.message ?? 'Failed to load menu items');
@@ -81,23 +108,44 @@ export default function AdminMenuPage() {
     setModal({ open: true, item });
     setIsActive(item ? item.status === 'active' : true);
     setIsChef(item ? (item.tags ?? []).includes('chef') : false);
+    setUploadFile(null);
     setUploadName(null);
+    setGlbFile(null);
+    setGlbName(null);
+    setGlbStatus('idle');
+    setGlbError('');
+    setGlbProgress(0);
     setSaveMsg('');
     setSaveErr('');
+    const defaultCat = (item as any)?.categoryId ?? item?.category ?? cats[0]?.id ?? '';
     setForm({
       name:        item?.name        ?? '',
       description: item?.description ?? '',
       price:       item?.price       ? String(item.price) : '',
-      category:    item?.category    ?? 'starters',
+      category:    defaultCat,
       prepTime:    item?.prepTime    ?? '',
       calories:    item?.calories    ? String(item.calories) : '',
     });
+  };
+
+  // ── Upload file to S3 presigned URL ───────────────────────────────────────────
+  const uploadToS3 = async (presignedUrl: string, file: File, contentType: string) => {
+    const res = await fetch(presignedUrl, {
+      method:  'PUT',
+      headers: { 'Content-Type': contentType },
+      body:    file,
+    });
+    if (!res.ok) throw new Error(`S3 upload failed (${res.status})`);
   };
 
   // ── Save (create or update) ───────────────────────────────────────────────────
   const saveItem = async () => {
     if (!form.name.trim() || !form.price) {
       setSaveErr('Name and price are required.');
+      return;
+    }
+    if (!form.category || form.category === '') {
+      setSaveErr('Please select a category. If none appear, refresh the page first.');
       return;
     }
     setSaving(true);
@@ -108,8 +156,7 @@ export default function AdminMenuPage() {
       name:        form.name.trim(),
       description: form.description.trim(),
       price:       parseFloat(form.price),
-      category:    form.category,
-      categoryId:  form.category,   // ← API requires categoryId
+      categoryId:  form.category,  // form.category holds the UUID
       status:      isActive ? 'active' : 'inactive',
       tags:        isChef ? ['chef'] : [],
       prepTime:    form.prepTime || '20 min',
@@ -117,18 +164,92 @@ export default function AdminMenuPage() {
     };
 
     try {
+      let raw: any;
+
       if (modal.item?.id) {
-        const updated = await updateMenuItem(modal.item.id, payload);
-        setItems(prev => prev.map(i => i.id === updated.id ? normaliseItem(updated) : i));
+        // version is required by API for optimistic locking
+        const version = (modal.item as any).version ?? 1;
+        raw = await updateMenuItem(modal.item.id, payload, version);
+        setItems(prev => prev.map(i => i.id === (raw.id ?? raw.itemId) ? normaliseItem(raw) : i));
         setSaveMsg('Item updated successfully!');
       } else {
-        const created = await createMenuItem(payload);
-        setItems(prev => [...prev, normaliseItem(created)]);
-        setSaveMsg('Item created successfully!');
+        // POST creates the item
+        raw = await createMenuItem(payload);
+        setItems(prev => [...prev, normaliseItem(raw)]);
+        setSaveMsg('Item created!');
+
+        // Always do a PUT after POST to get fresh presigned imageUrl + arModelUrl
+        // The API only returns these on PUT responses for this restaurant
+        if (uploadFile || glbFile) {
+          setSaveMsg('Getting upload URLs…');
+          const itemId  = raw.itemId ?? raw.id;
+          const version = raw.version ?? 1;
+          const refreshed = await updateMenuItem(itemId, {
+            name:        raw.name,
+            description: raw.description,
+            categoryId:  raw.categoryId,
+            status:      raw.isActive ? 'active' : 'inactive',
+            price:       (raw.priceMinorUnits ?? 0) / 100,
+          }, version);
+          raw = { ...raw, ...refreshed };
+          const normRefreshed = normaliseItem(raw);
+          setItems(prev => prev.map(i => (i.id === normRefreshed.id) ? normRefreshed : i));
+          setModal(prev => ({ ...prev, item: normRefreshed }));
+        }
       }
+
+      // Upload image to S3 if selected
+      if (uploadFile && raw.imageUrl) {
+        setSaveMsg('Uploading image…');
+        await uploadToS3(raw.imageUrl, uploadFile, uploadFile.type || 'image/png');
+        setSaveMsg('Image uploaded!');
+      }
+
+      // Upload GLB to S3 if selected
+      if (glbFile && raw.arModelUrl) {
+        setSaveMsg('Uploading 3D model…');
+        setGlbStatus('uploading');
+        setGlbProgress(40);
+
+        await uploadToS3(raw.arModelUrl, glbFile, 'model/gltf-binary');
+        setGlbProgress(70);
+        setSaveMsg('Validating 3D model…');
+        setGlbStatus('validating');
+
+        // Poll AR API to check validator status (every 5s, up to 60s)
+        const RID     = process.env.NEXT_PUBLIC_RESTAURANT_ID || '53591ab9-ac4e-4841-958b-d38853a90f0b';
+        const itemId  = raw.itemId ?? raw.id;
+        let approved  = false;
+
+        for (let i = 0; i < 12; i++) {
+          await new Promise(r => setTimeout(r, 5000));
+          setGlbProgress(70 + ((i + 1) / 12) * 30);
+          const checkRes = await fetch(
+            `/api/ar?rid=${encodeURIComponent(RID)}&iid=${encodeURIComponent(itemId)}`,
+            { cache: 'no-store' }
+          );
+          if (checkRes.ok) {
+            setGlbProgress(100);
+            setGlbStatus('approved');
+            setSaveMsg('3D model approved & live!');
+            approved = true;
+            break;
+          }
+        }
+        if (!approved) {
+          setGlbStatus('rejected');
+          setGlbError('Validation timed out. The model may have failed checks.');
+        }
+        return; // Keep modal open to show GLB result
+      }
+
       setTimeout(() => { setModal({ open: false }); setSaveMsg(''); }, 1200);
     } catch (err: any) {
       setSaveErr(err?.message ?? 'Save failed. Please try again.');
+      if (glbStatus === 'uploading' || glbStatus === 'validating') {
+        setGlbStatus('error');
+        setGlbError(err?.message ?? 'Upload failed');
+      }
     } finally {
       setSaving(false);
     }
@@ -274,11 +395,18 @@ export default function AdminMenuPage() {
               <div key={item.id ?? `item-${idx}`}
                 className="grid gap-3 px-4 py-3.5 border-b border-[#14b8a6] last:border-0 items-center hover:bg-ink-50 transition-colors cursor-pointer"
                 style={{ gridTemplateColumns: '40px 1fr 120px 80px 80px 90px 80px' }}>
-                <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-[22px]">
-                  {item.emoji}
+                <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-[22px] overflow-hidden">
+                  {(item as any).imageUrl
+                    ? <img src={(item as any).imageUrl} alt={item.name} className="w-full h-full object-cover rounded-xl" />
+                    : item.emoji}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[13px] font-semibold text-ink-900 truncate">{item.name}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-[13px] font-semibold text-ink-900 truncate">{item.name}</p>
+                    {(item as any).hasArModel && (
+                      <span className="text-[9px] bg-purple-100 border border-purple-200 text-purple-600 px-1.5 py-0.5 rounded-full font-bold flex-shrink-0">3D</span>
+                    )}
+                  </div>
                   <p className="text-[11px] text-ink-400 truncate">{item.description}</p>
                 </div>
                 <div className="text-[12px] text-ink-500 font-medium capitalize">{item.category}</div>
@@ -321,8 +449,7 @@ export default function AdminMenuPage() {
       {modal.open && (
         <div className="fixed inset-0 bg-ink-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-6"
           onClick={e => e.target === e.currentTarget && setModal({ open: false })}>
-          <div className="bg-black
-           border border-ink-100 rounded-3xl w-[440px] max-h-[90vh] overflow-y-auto p-6 shadow-card-lg">
+          <div className="bg-black border border-ink-100 rounded-3xl w-[440px] max-h-[90vh] overflow-y-auto p-6 shadow-card-lg">
 
             <div className="flex items-center justify-between mb-5">
               <div>
@@ -355,82 +482,162 @@ export default function AdminMenuPage() {
 
             {/* Name */}
             <div className="mb-4">
-              <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">
-                Item Name *
-              </label>
-              <input value={form.name}
-                onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">Item Name *</label>
+              <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
                 placeholder="e.g. Grilled Sea Bass" className="w-full h-10 text-[13px]" />
             </div>
 
             {/* Category + Price */}
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
-                <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">
-                  Category
-                </label>
-                <select value={form.category}
-                  onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
-                  className="w-full h-10 text-[13px]">
-                  {CATEGORIES.filter(c => c.id !== 'all').map(c => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
+                <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">Category</label>
+                <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
+                  className={`w-full h-10 text-[13px] ${!form.category ? 'border-amber-400' : ''}`}>
+                  {cats.length === 0 && <option value="">⚠ No categories — add items first</option>}
+                  {cats.map(c => <option key={c.id} value={c.id}>{c.name || c.id.slice(0,8)}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">
-                  Price (Rs) *
-                </label>
-                <input type="number" value={form.price}
-                  onChange={e => setForm(p => ({ ...p, price: e.target.value }))}
+                <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">Price (Rs) *</label>
+                <input type="number" value={form.price} onChange={e => setForm(p => ({ ...p, price: e.target.value }))}
                   placeholder="0" className="w-full h-10 text-[13px]" />
               </div>
             </div>
 
             {/* Description */}
             <div className="mb-4">
-              <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">
-                Description
-              </label>
-              <textarea value={form.description}
-                onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
-                placeholder="Short description…" rows={2}
-                className="w-full rounded-xl px-3 py-2.5 text-[13px] resize-none" />
+              <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">Description</label>
+              <textarea value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))}
+                placeholder="Short description…" rows={2} className="w-full rounded-xl px-3 py-2.5 text-[13px] resize-none" />
             </div>
 
             {/* Prep + Calories */}
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
-                <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">
-                  Prep Time
-                </label>
-                <input value={form.prepTime}
-                  onChange={e => setForm(p => ({ ...p, prepTime: e.target.value }))}
+                <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">Prep Time</label>
+                <input value={form.prepTime} onChange={e => setForm(p => ({ ...p, prepTime: e.target.value }))}
                   placeholder="e.g. 25 min" className="w-full h-10 text-[13px]" />
               </div>
               <div>
-                <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">
-                  Calories
-                </label>
-                <input type="number" value={form.calories}
-                  onChange={e => setForm(p => ({ ...p, calories: e.target.value }))}
+                <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">Calories</label>
+                <input type="number" value={form.calories} onChange={e => setForm(p => ({ ...p, calories: e.target.value }))}
                   placeholder="e.g. 680" className="w-full h-10 text-[13px]" />
               </div>
             </div>
 
-            {/* Image */}
+            {/* Image Upload */}
             <div className="mb-4">
               <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">
                 Item Image (S3 Upload)
+                {modal.item && !(modal.item as any).imageKey && (
+                  <span className="ml-2 text-amber-500 normal-case font-normal">— no image yet</span>
+                )}
+                {modal.item && (modal.item as any).imageKey && (
+                  <span className="ml-2 text-green-600 normal-case font-normal">✓ uploaded</span>
+                )}
               </label>
               <label className="flex flex-col items-center gap-2 p-5 rounded-2xl border-2 border-dashed border-ink-200 bg-ink-50 cursor-pointer hover:border-brand-300 hover:bg-brand-50 transition-all">
                 <input type="file" accept="image/*" className="hidden"
-                  onChange={e => setUploadName(e.target.files?.[0]?.name ?? null)} />
+                  onChange={e => {
+                    const f = e.target.files?.[0] ?? null;
+                    setUploadFile(f);
+                    setUploadName(f?.name ?? null);
+                  }} />
                 <CloudUpload size={26} className={uploadName ? 'text-brand-500' : 'text-ink-300'} />
                 <span className={`text-[12px] font-medium ${uploadName ? 'text-brand-600' : 'text-ink-400'}`}>
                   {uploadName ? `✓ ${uploadName}` : 'Click to upload · PNG, JPG up to 5MB'}
                 </span>
               </label>
+            </div>
+
+            {/* GLB / 3D Model Upload */}
+            <div className="mb-4">
+              <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">
+                3D AR Model (.glb) — S3 Upload
+                {modal.item && !(modal.item as any).arModelKey && (
+                  <span className="ml-2 text-amber-500 normal-case font-normal">— no model yet</span>
+                )}
+                {modal.item && (modal.item as any).arModelKey && (
+                  <span className="ml-2 text-green-600 normal-case font-normal">✓ uploaded</span>
+                )}
+              </label>
+
+              {/* Drop zone — only show when idle */}
+              {(glbStatus === 'idle') && (
+                <label className="flex flex-col items-center gap-2 p-5 rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/30 cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all">
+                  <input type="file" accept=".glb,.gltf" className="hidden"
+                    onChange={e => {
+                      const f = e.target.files?.[0] ?? null;
+                      setGlbFile(f);
+                      setGlbName(f?.name ?? null);
+                      setGlbError('');
+                    }} />
+                  <span className="text-2xl">🫙</span>
+                  <span className={`text-[12px] font-medium ${glbName ? 'text-purple-700' : 'text-ink-400'}`}>
+                    {glbName ? `✓ ${glbName}` : 'Click to upload · .glb / .gltf · max 50MB'}
+                  </span>
+                  {glbName && (
+                    <span className="text-[11px] text-purple-500">Will upload to S3 when you save</span>
+                  )}
+                </label>
+              )}
+
+              {/* Uploading progress */}
+              {glbStatus === 'uploading' && (
+                <div className="p-4 rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Loader2 size={13} className="animate-spin text-purple-500" />
+                    <span className="text-[12px] text-purple-700 font-medium">Uploading to S3…</span>
+                    <span className="ml-auto text-[11px] text-purple-500 font-mono-dm">{Math.round(glbProgress)}%</span>
+                  </div>
+                  <div className="h-1.5 bg-purple-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-purple-500 rounded-full transition-all duration-300" style={{ width: `${glbProgress}%` }} />
+                  </div>
+                </div>
+              )}
+
+              {/* Validating progress */}
+              {glbStatus === 'validating' && (
+                <div className="p-4 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/30">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Loader2 size={13} className="animate-spin text-amber-500" />
+                    <span className="text-[12px] text-amber-700 font-medium">GLB validator running…</span>
+                    <span className="ml-auto text-[11px] text-amber-500 font-mono-dm">{Math.round(glbProgress)}%</span>
+                  </div>
+                  <div className="h-1.5 bg-amber-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-amber-400 rounded-full transition-all duration-500" style={{ width: `${glbProgress}%` }} />
+                  </div>
+                  <p className="text-[10px] text-amber-500 mt-2">Checking geometry, textures & file size…</p>
+                </div>
+              )}
+
+              {/* Approved */}
+              {glbStatus === 'approved' && (
+                <div className="p-4 rounded-2xl border-2 border-dashed border-green-300 bg-green-50/30 flex items-center gap-3">
+                  <CheckCircle size={20} className="text-green-500 flex-shrink-0" />
+                  <div>
+                    <p className="text-[12px] text-green-700 font-semibold">✓ 3D Model Approved & Live</p>
+                    <p className="text-[11px] text-green-600 mt-0.5">Model passed validation — AR button will show for guests</p>
+                  </div>
+                </div>
+              )}
+
+              {/* Rejected / Error */}
+              {(glbStatus === 'rejected' || glbStatus === 'error') && (
+                <div className="p-4 rounded-2xl border-2 border-dashed border-red-300 bg-red-50/30">
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertCircle size={14} className="text-red-500 flex-shrink-0" />
+                    <p className="text-[12px] text-red-700 font-semibold">
+                      {glbStatus === 'rejected' ? 'GLB Rejected by Validator' : 'Upload Error'}
+                    </p>
+                  </div>
+                  <p className="text-[11px] text-red-500 mb-2">{glbError}</p>
+                  <button onClick={() => { setGlbStatus('idle'); setGlbFile(null); setGlbName(null); }}
+                    className="text-[11px] text-red-600 underline">
+                    Try a different file
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Toggles */}
@@ -449,7 +656,7 @@ export default function AdminMenuPage() {
                 {modal.item ? 'PUT' : 'POST'} Payload Preview
               </p>
               <p className="text-[10px] text-ink-500 font-mono-dm break-all">
-                {`{ name: "${form.name || '…'}", price: ${form.price || 0}, categoryId: "${form.category}", status: "${isActive ? 'active' : 'inactive'}" }`}
+                {`{ name: "${form.name || '…'}", price: ${form.price || 0}, categoryId: "${form.category.slice(0,8)}…", status: "${isActive ? 'active' : 'inactive'}" }`}
               </p>
             </div>
 
@@ -459,10 +666,10 @@ export default function AdminMenuPage() {
                 className="flex-1 h-10 rounded-xl bg-ink-50 border border-ink-200 text-[13px] font-semibold text-ink-500 hover:bg-ink-100 transition-colors">
                 Cancel
               </button>
-              <button onClick={saveItem} disabled={saving}
+              <button onClick={saveItem} disabled={saving || glbStatus === 'uploading' || glbStatus === 'validating'}
                 className="flex-[2] h-10 rounded-xl flex items-center justify-center gap-1.5 text-[13px] font-semibold transition-all bg-brand-500 text-white hover:bg-brand-600 shadow-brand disabled:opacity-60">
-                {saving
-                  ? <><Loader2 size={14} className="animate-spin" /> Saving…</>
+                {saving || glbStatus === 'uploading' || glbStatus === 'validating'
+                  ? <><Loader2 size={14} className="animate-spin" /> {saveMsg || 'Saving…'}</>
                   : modal.item ? '✓ Update Item' : '✓ Create Item'}
               </button>
             </div>

@@ -2,11 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft, Share2, Heart, Clock, Cuboid, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Share2, Heart, Clock, Cuboid, Loader2, AlertCircle, Send } from 'lucide-react';
 import Link from 'next/link';
 import { formatPrice } from '@/lib/data';
 import { fetchMenuItem, normaliseItem, type ApiMenuItem } from '@/lib/menu-api';
-import { useCartStore } from '@/lib/store';
 
 const TAG_STYLES: Record<string, string> = {
   veg:     'bg-green-50 border border-green-200 text-green-700',
@@ -16,55 +15,81 @@ const TAG_STYLES: Record<string, string> = {
   chef:    'bg-amber-50 border border-amber-200 text-amber-700',
 };
 
+const TENANT_ID     = process.env.NEXT_PUBLIC_TENANT_ID_KDS     ?? 't123';
+const RESTAURANT_ID = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS ?? 'r456';
+
 export default function ItemDetailPage() {
   const { id }  = useParams<{ id: string }>();
   const router  = useRouter();
-  const { addItem } = useCartStore();
 
   const [item,      setItem]      = useState<ApiMenuItem | null>(null);
+  const [rawItem,   setRawItem]   = useState<any>(null);
   const [loading,   setLoading]   = useState(true);
   const [error,     setError]     = useState('');
   const [qty,       setQty]       = useState(1);
   const [wished,    setWished]    = useState(false);
-  const [added,     setAdded]     = useState(false);
   const [doneness,  setDoneness]  = useState('');
   const [side,      setSide]      = useState('');
   const [sauce,     setSauce]     = useState('');
-  const [arReady,   setArReady]   = useState<boolean | null>(null); // null=checking
+  const [arReady,   setArReady]   = useState<boolean | null>(null);
 
-  // ── Fetch menu item from API ──────────────────────────────────────────────────
+  // Order state
+  const [placing,   setPlacing]   = useState(false);
+  const [placed,    setPlaced]    = useState(false);
+  const [orderId,   setOrderId]   = useState('');
+  const [orderErr,  setOrderErr]  = useState('');
+
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    // Always use the menu restaurant ID — not the QR session rid
-    const menuRid = process.env.NEXT_PUBLIC_RESTAURANT_ID || '53591ab9-ac4e-4841-958b-d38853a90f0b';
+    const menuRid = process.env.NEXT_PUBLIC_RESTAURANT_ID || '2687382e-3b00-4f57-9014-f484df89e3fe';
     fetchMenuItem(id, menuRid)
       .then(raw => {
+        setRawItem(raw);
         const normalised = normaliseItem(raw);
         setItem(normalised);
         setDoneness(normalised.customisations?.doneness?.[1] ?? '');
         setSide(normalised.customisations?.sides?.[0] ?? '');
         setSauce(normalised.customisations?.sauces?.[0] ?? '');
         setLoading(false);
-
-        // ── Check AR: use arModelUrl from item data if available ─────────────
-        if ((normalised as any).hasArModel || (normalised as any).arModelUrl) {
-          setArReady(true);
-          return;
-        }
-        // Fallback: check AR API
-        const arRid = process.env.NEXT_PUBLIC_RESTAURANT_ID
-          || '53591ab9-ac4e-4841-958b-d38853a90f0b';
-        if (!arRid) { setArReady(false); return; }
-        fetch(`/api/ar?rid=${encodeURIComponent(arRid)}&iid=${encodeURIComponent(id)}`, { cache: 'no-store' })
-          .then(r => setArReady(r.ok))
-          .catch(() => setArReady(false));
+        const hasModel = !!(raw as any).arModelUrl || !!(raw as any).arModelKey;
+        setArReady(hasModel);
       })
-      .catch(e => {
-        setError(e?.message ?? 'Failed to load item');
-        setLoading(false);
-      });
+      .catch(e => { setError(e?.message ?? 'Failed to load item'); setLoading(false); });
   }, [id]);
+
+  // ── Direct order placement ────────────────────────────────────────────────────
+  const placeOrder = async () => {
+    if (!item) return;
+    setPlacing(true);
+    setOrderErr('');
+    try {
+      const tableId = (typeof window !== 'undefined' ? sessionStorage.getItem('lm_tid') : null) ?? 'table-01';
+      const payload = {
+        tenantId:              TENANT_ID,
+        restaurantId:          RESTAURANT_ID,
+        tableId,
+        currencyCode:          'PKR',
+        totalAmountMinorUnits: Math.round(item.price * qty * 100),
+        lineItems: [{
+          itemId:               item.id,
+          name:                 item.name,
+          quantity:             qty,
+          unitPriceMinorUnits:  Math.round(item.price * 100),
+          totalPriceMinorUnits: Math.round(item.price * qty * 100),
+        }],
+      };
+      const res  = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error ?? data?.message ?? `Error ${res.status}`);
+      setOrderId(data.orderId ?? '');
+      setPlaced(true);
+    } catch (err: any) {
+      setOrderErr(err?.message ?? 'Order failed. Please try again.');
+    } finally {
+      setPlacing(false);
+    }
+  };
 
   if (loading) return (
     <main className="min-h-dvh flex items-center justify-center bg-slate-50">
@@ -81,34 +106,57 @@ export default function ItemDetailPage() {
         <AlertCircle size={32} className="text-red-400" />
         <p className="text-[14px] font-semibold text-ink-700">Item not found</p>
         <p className="text-[12px] text-ink-400">{error}</p>
-        <button onClick={() => router.back()} className="px-4 py-2 rounded-xl bg-brand-50 border border-brand-200 text-brand-700 text-[13px] font-semibold">
-          ← Go Back
-        </button>
+        <button onClick={() => router.back()} className="px-4 py-2 rounded-xl bg-brand-50 border border-brand-200 text-brand-700 text-[13px] font-semibold">← Go Back</button>
       </div>
     </main>
   );
 
-  // Read restaurant ID from QR scan session — fully dynamic, works for any restaurant
-  const rid = process.env.NEXT_PUBLIC_RESTAURANT_ID
-    || '53591ab9-ac4e-4841-958b-d38853a90f0b';
-  const arModelUrl = (item as any).arModelUrl ?? '';
-  const arHref = `/guest/ar?rid=${encodeURIComponent(rid)}&iid=${encodeURIComponent(id)}&name=${encodeURIComponent(item.name)}&emoji=${encodeURIComponent(item.emoji ?? '🍽️')}${arModelUrl ? '&url=' + encodeURIComponent(arModelUrl) : ''}`;
+  // ── Order success screen ──────────────────────────────────────────────────────
+  if (placed) return (
+    <main className="min-h-dvh bg-black flex flex-col items-center">
+      <div className="phone-shell">
+        <div className="flex-1 flex flex-col items-center justify-center px-6 pb-10">
+          <div className="relative w-[100px] h-[100px] mb-6">
+            <div className="absolute inset-0 rounded-full border border-gold-400/30" />
+            <div className="absolute -inset-2 rounded-full border border-gold-400/15 animate-pulse-slow" />
+            <div className="absolute inset-0 rounded-full bg-gold-400/12 flex items-center justify-center text-4xl">✓</div>
+          </div>
+          <h2 className="font-serif text-[26px] text-[#f5e9d0] font-semibold mb-2 text-center">Order Placed!</h2>
+          <p className="text-[14px] text-white/35 text-center leading-relaxed mb-4 px-4">
+            Your <strong className="text-white/60">{item.name}</strong> × {qty} has been sent to the kitchen.
+          </p>
+          {orderId && (
+            <div className="bg-gold-400/10 border border-gold-400/25 rounded-full px-5 py-2 mb-8">
+              <span className="text-[13px] text-gold-400 font-medium font-mono-dm">
+                #{orderId.slice(0, 8).toUpperCase()}
+              </span>
+            </div>
+          )}
+          <div className="flex flex-col gap-3 w-full max-w-[280px]">
+            <button onClick={() => router.push('/guest/tracking')}
+              className="h-12 rounded-2xl bg-brand-500 text-white text-[14px] font-semibold flex items-center justify-center gap-2 shadow-brand">
+              📡 Track My Order
+            </button>
+            <button onClick={() => { setPlaced(false); setQty(1); }}
+              className="h-12 rounded-2xl bg-white/[0.05] border border-white/[0.08] text-white/60 text-[14px] font-medium">
+              Order Again
+            </button>
+            <button onClick={() => router.push('/guest/menu')}
+              className="h-12 rounded-2xl bg-white/[0.05] border border-white/[0.08] text-white/60 text-[14px] font-medium">
+              ← Back to Menu
+            </button>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
 
-  const handleAdd = () => {
-    addItem({
-      menuItemId: item.id,
-      name:       item.name,
-      emoji:      item.emoji ?? '🍽️',
-      price:      item.price,
-      quantity:   qty,
-      options:    { doneness, side, sauce },
-    });
-    setAdded(true);
-    setTimeout(() => setAdded(false), 1800);
-  };
+  const rid        = process.env.NEXT_PUBLIC_RESTAURANT_ID || '2687382e-3b00-4f57-9014-f484df89e3fe';
+  const arModelUrl = rawItem?.arModelUrl ?? '';
+  const arHref     = `/guest/ar?rid=${encodeURIComponent(rid)}&iid=${encodeURIComponent(id)}&name=${encodeURIComponent(item.name)}&emoji=${encodeURIComponent(item.emoji ?? '🍽️')}${arModelUrl ? '&url=' + encodeURIComponent(arModelUrl) : ''}`;
 
   return (
-    <main className="min-h-dvh bg-black flex flex-col items-center ">
+    <main className="min-h-dvh bg-black flex flex-col items-center">
       <div className="phone-shell">
         {/* Hero */}
         <div className="relative w-full h-[210px] flex items-center justify-center text-[88px] bg-gradient-to-br from-brand-50 to-teal-50">
@@ -129,8 +177,6 @@ export default function ItemDetailPage() {
               </span>
             ))}
           </div>
-
-          {/* AR button — only shown if model exists */}
           {arReady === true && (
             <Link href={arHref} className="absolute bottom-3.5 right-4 flex items-center gap-1.5 bg-black border border-brand-200 rounded-full px-2.5 py-1.5 shadow-card hover:bg-brand-50 transition-colors">
               <Cuboid size={12} className="text-brand-600" />
@@ -162,7 +208,7 @@ export default function ItemDetailPage() {
             </div>
           </div>
 
-          {/* AR banner — only when model exists */}
+          {/* AR banner */}
           {arReady === true && (
             <Link href={arHref} className="mx-5 mt-4 flex items-center gap-3 p-3.5 rounded-2xl bg-gradient-to-r from-brand-50 to-teal-50 border border-brand-100 hover:border-brand-300 transition-all">
               <div className="w-10 h-10 rounded-xl bg-brand-500 flex items-center justify-center flex-shrink-0 shadow-brand">
@@ -248,6 +294,14 @@ export default function ItemDetailPage() {
               <button onClick={() => setQty(Math.min(5,qty+1))} className="w-10 h-10 flex items-center justify-center hover:bg-brand-50 transition-colors text-brand-600 font-bold text-lg">+</button>
             </div>
           </div>
+
+          {/* Order error */}
+          {orderErr && (
+            <div className="mx-5 mt-3 flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl">
+              <AlertCircle size={14} className="text-red-500 flex-shrink-0" />
+              <p className="text-[12px] text-red-600">{orderErr}</p>
+            </div>
+          )}
           <div className="h-4" />
         </div>
 
@@ -257,9 +311,14 @@ export default function ItemDetailPage() {
             <p className="text-[10px] text-ink-400 uppercase tracking-widest font-semibold">Total</p>
             <p className="font-serif text-[22px] text-brand-600 font-semibold">{formatPrice(item.price * qty)}</p>
           </div>
-          <button onClick={handleAdd}
-            className={`flex-1 h-[52px] rounded-2xl flex items-center justify-center gap-2 text-[15px] font-semibold transition-all ${added ? 'bg-green-500 text-white shadow-lg' : 'bg-brand-500 text-white shadow-brand hover:bg-brand-600'}`}>
-            {added ? '✓ Added to Cart!' : '🛒 Add to Cart'}
+          <button onClick={placeOrder} disabled={placing}
+            className={`flex-1 h-[52px] rounded-2xl flex items-center justify-center gap-2 text-[15px] font-semibold transition-all ${
+              placing ? 'bg-brand-400 text-white' : 'bg-brand-500 text-white shadow-brand hover:bg-brand-600'
+            }`}>
+            {placing
+              ? <><span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> Placing Order…</>
+              : <><Send size={16} /> Place Order · {formatPrice(item.price * qty)}</>
+            }
           </button>
         </div>
       </div>

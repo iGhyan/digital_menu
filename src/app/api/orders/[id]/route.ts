@@ -23,13 +23,27 @@ export async function PATCH(req: NextRequest, ctx: Context) {
   const { id } = await ctx.params;
   try {
     const body = await req.json();
-    const payload = { tenantId: TENANT_ID, restaurantId: RESTAURANT_ID, ...body, orderId: id };
-    const res = await fetch(`${ORDERS_BASE}/orders`, {
-      method: 'PATCH',
+
+    // AWS PATCH endpoint: /Prod/orders/{orderId}
+    // orderId goes in BOTH the URL path AND the body
+    const payload = {
+      tenantId:     TENANT_ID,
+      restaurantId: RESTAURANT_ID,
+      ...body,
+      orderId: id,
+    };
+
+    console.log('[PATCH proxy] → AWS:', `${ORDERS_BASE}/orders/${id}`, 'payload:', JSON.stringify(payload));
+
+    const res = await fetch(`${ORDERS_BASE}/orders/${id}`, {
+      method:  'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body:    JSON.stringify(payload),
     });
+
     const text = await res.text();
+    console.log('[PATCH proxy] ← AWS status:', res.status, text);
+
     if (!res.ok) return NextResponse.json({ error: text }, { status: res.status });
     return NextResponse.json(text ? JSON.parse(text) : { success: true });
   } catch (err: any) {
