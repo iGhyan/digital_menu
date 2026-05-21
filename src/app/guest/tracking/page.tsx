@@ -33,9 +33,10 @@ const STATUS_STEPS = [
 function getStepIndex(status: string): number {
   const s = (status ?? '').toUpperCase();
   if (s === 'RECEIVED' || s === 'PENDING') return 0;
-  if (s === 'PREPARING' || s === 'IN_PROGRESS') return 1;
-  if (s === 'READY' || s === 'READY_TO_SERVE') return 2;
-  return 3; // DELIVERED, TIMED_OUT, CANCELLED, COMPLETED
+  if (s === 'PREPARING' || s === 'IN_PROGRESS' || s === 'KITCHEN_ACCEPTED') return 1;
+  if (s === 'READY' || s === 'READY_TO_SERVE' || s === 'FOOD_READY') return 2;
+  if (s === 'DELIVERED' || s === 'COMPLETED') return 3;
+  return 0; // TIMED_OUT, CANCELLED → show as step 0 (will be caught by isCancelled)
 }
 
 function formatTime(iso?: string) {
@@ -67,11 +68,19 @@ export default function TrackingPage() {
       if (!res.ok) throw new Error(`Orders API ${res.status}`);
       const data = await res.json();
       // Sort newest first
-      const sorted = (data.orders ?? []).sort(
-        (a: ApiOrder, b: ApiOrder) =>
-          new Date(b.placedAt ?? 0).getTime() - new Date(a.placedAt ?? 0).getTime()
+      const all = (data.orders ?? []);
+      // Sort newest first
+      all.sort((a: ApiOrder, b: ApiOrder) =>
+        new Date(b.placedAt ?? 0).getTime() - new Date(a.placedAt ?? 0).getTime()
       );
-      setOrders(sorted);
+      // Separate active vs timed-out: show active first, timed-out at the end
+      const active = all.filter((o: ApiOrder) => 
+        !['TIMED_OUT', 'CANCELLED'].includes((o.status ?? '').toUpperCase())
+      );
+      const timedOut = all.filter((o: ApiOrder) => 
+        ['TIMED_OUT', 'CANCELLED'].includes((o.status ?? '').toUpperCase())
+      );
+      setOrders([...active, ...timedOut]);
       setLastSync(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }));
       setError('');
     } catch (e: any) {
@@ -111,11 +120,17 @@ export default function TrackingPage() {
            sessionTable && t.endsWith(sessionTable.padStart(2, '0'));
   });
 
-  const displayOrders = myOrders.length > 0 ? myOrders : orders;
+  // Prefer active orders (not timed out) for display
+  const activeOrders = (myOrders.length > 0 ? myOrders : orders).filter(
+    o => !['TIMED_OUT', 'CANCELLED'].includes((o.status ?? '').toUpperCase())
+  );
+  const allDisplayOrders = myOrders.length > 0 ? myOrders : orders;
+  const displayOrders = activeOrders.length > 0 ? activeOrders : allDisplayOrders;
   const latest        = displayOrders[0];
   const currentStep   = latest ? getStepIndex(latest.status) : 0;
-  const isCancelled   = latest?.status?.toUpperCase() === 'TIMED_OUT' ||
-                        latest?.status?.toUpperCase() === 'CANCELLED';
+  const isCancelled   = ['TIMED_OUT', 'CANCELLED'].includes(
+    (latest?.status ?? '').toUpperCase()
+  );
 
   return (
     <main className="min-h-dvh bg-surface flex flex-col items-center">
