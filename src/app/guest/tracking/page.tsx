@@ -118,7 +118,7 @@ export default function TrackingPage() {
                         latest?.status?.toUpperCase() === 'CANCELLED';
 
   return (
-    <main className="min-h-dvh bg-surface flex flex-col items-center p-4">
+    <main className="min-h-dvh bg-surface flex flex-col items-center">
       <div className="phone-shell">
 
         <div className="flex justify-between px-5 pt-4 text-xs text-white/35">

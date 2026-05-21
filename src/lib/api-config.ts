@@ -59,8 +59,8 @@ export async function apiFetch<T>(
 
 export const ORDERS_API_BASE = 'https://rz0z72aem4.execute-api.us-east-1.amazonaws.com/Prod';
 
-export const TENANT_ID_KDS     = process.env.NEXT_PUBLIC_TENANT_ID_KDS     ?? 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
-export const RESTAURANT_ID_KDS = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS ?? '2687382e-3b00-4f57-9014-f484df89e3fe';
+export const TENANT_ID_KDS     = process.env.NEXT_PUBLIC_TENANT_ID_KDS     ?? 't123';
+export const RESTAURANT_ID_KDS = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS ?? 'r456';
 
 export const ORDERS_API = {
   list:   () => `${ORDERS_API_BASE}/orders?tenantId=${TENANT_ID_KDS}&restaurantId=${RESTAURANT_ID_KDS}`,
