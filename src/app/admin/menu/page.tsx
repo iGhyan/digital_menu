@@ -9,6 +9,7 @@ import { formatPrice } from '@/lib/data';
 import { Toggle, StatusChip } from '@/components/ui';
 import {
   fetchMenuItems,
+  fetchMenuItem,
   createMenuItem,
   updateMenuItem,
   normaliseItem,
@@ -141,15 +142,11 @@ export default function AdminMenuPage() {
 
         if (uploadFile || glbFile) {
           setSaveMsg('Getting upload URLs…');
-          const itemId  = raw.itemId ?? raw.id;
-          const version = raw.version ?? 1;
-          const refreshed = await updateMenuItem(itemId, {
-            name: raw.name, description: raw.description,
-            categoryId: raw.categoryId,
-            status: raw.isActive ? 'active' : 'inactive',
-            price: (raw.priceMinorUnits ?? 0) / 100,
-          }, version);
-          raw = { ...raw, ...refreshed };
+          // GET the item directly — GET returns presigned imageUrl + arModelUrl, PUT does not
+          const { fetchMenuItem } = await import('@/lib/menu-api');
+          const itemId = raw.itemId ?? raw.id;
+          const fetched = await fetchMenuItem(itemId, ADMIN_RESTAURANT_ID) as any;
+          raw = { ...raw, ...fetched };
           const nr = normaliseItem(raw);
           setItems(prev => prev.map(i => i.id === nr.id ? nr : i));
           setModal(prev => ({ ...prev, item: nr }));
@@ -224,6 +221,12 @@ export default function AdminMenuPage() {
         prepTime: form.prepTime || '20 min',
         calories: form.calories ? parseInt(form.calories) : undefined,
       });
+      // GET item to get presigned imageUrl + arModelUrl (POST doesn't return them)
+      if (uploadFile || glbFile) {
+        setSaveMsg('Getting upload URLs…');
+        const fetched = await fetchMenuItem(raw.itemId ?? raw.id, ADMIN_RESTAURANT_ID) as any;
+        raw = { ...raw, ...fetched };
+      }
       setItems(prev => [...prev, normaliseItem(raw)]);
       setSaveMsg('Created! Uploading files…');
       if (uploadFile && raw.imageUrl) {

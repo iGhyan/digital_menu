@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, RefreshCw, CheckCircle, ChefHat, Bell, Bike } from 'lucide-react';
-import Link from 'next/link';
 
 interface LineItem {
   name:                 string;
@@ -97,9 +96,13 @@ export default function TrackingPage() {
     return () => clearInterval(id);
   }, [lastSync]);
 
-  // Match to current table session
-  const sessionTid = typeof window !== 'undefined' ? sessionStorage.getItem('lm_tid') ?? '' : '';
-  const sessionTable = typeof window !== 'undefined' ? sessionStorage.getItem('lm_table') ?? '' : '';
+  // Match to current table session — SSR-safe via state
+  const [sessionTid,   setSessionTid]   = useState('');
+  const [sessionTable, setSessionTable] = useState('');
+  useEffect(() => {
+    setSessionTid(sessionStorage.getItem('lm_tid') ?? '');
+    setSessionTable(sessionStorage.getItem('lm_table') ?? '');
+  }, []);
 
   const myOrders = orders.filter(o => {
     const t = (o.tableId ?? '').toLowerCase();
@@ -115,7 +118,7 @@ export default function TrackingPage() {
                         latest?.status?.toUpperCase() === 'CANCELLED';
 
   return (
-    <main className="min-h-dvh bg-surface flex flex-col items-center">
+    <main className="min-h-dvh bg-surface flex flex-col items-center p-4">
       <div className="phone-shell">
 
         <div className="flex justify-between px-5 pt-4 text-xs text-white/35">
@@ -342,18 +345,19 @@ export default function TrackingPage() {
           )}
         </div>
 
-           <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.05] bg-[#14b8a60f]">
+        {/* Bottom nav */}
+        <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.05] bg-surface">
           {[
-            { icon: '🏠', label: 'Home',   href: '/guest' },
-            { icon: '📖', label: 'Menu',   href: '/guest/menu', active: true },
-            { icon: '🛒', label: 'Cart',   href: '/guest/cart' },
-            { icon: '🕐', label: 'Orders', href: '/guest/tracking' },
+            { icon: '🏠', label: 'Home',   href: '/guest'           },
+            { icon: '📖', label: 'Menu',   href: '/guest/menu'      },
+            { icon: '🛒', label: 'Cart',   href: '/guest/cart'      },
+            { icon: '📡', label: 'Orders', href: '/guest/tracking', active: true },
           ].map(n => (
-            <Link key={n.label} href={n.href}
+            <button key={n.label} onClick={() => router.push(n.href)}
               className={`flex flex-col items-center gap-1 px-2.5 py-1 ${n.active ? 'text-gold-400' : 'text-white/20'}`}>
               <span className="text-[20px]">{n.icon}</span>
               <span className="text-[10px] font-medium">{n.label}</span>
-            </Link>
+            </button>
           ))}
         </div>
       </div>
