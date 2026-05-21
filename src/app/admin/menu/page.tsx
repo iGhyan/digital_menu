@@ -171,7 +171,7 @@ export default function AdminMenuPage() {
           prepTime:    form.prepTime || '20 min',
           calories:    form.calories ? parseInt(form.calories) : undefined,
         }, version);
-        setItems(prev => prev.map(i => i.id === (raw.id ?? raw.itemId) ? normaliseItem(raw) : i));
+        setItems(prev => prev.map(i => i.id === ((raw as any).id ?? (raw as any).itemId) ? normaliseItem(raw) : i));
         setSaveMsg('Item updated!');
 
         // Image upload on existing item via presigned URL
