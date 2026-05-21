@@ -4,12 +4,11 @@
  */
 
 // ── Environment variables ──────────────────────────────────────────────────────
-// Set these in .env.local (local) and Vercel dashboard (production)
 export const RESTAURANT_ID =
-  process.env.NEXT_PUBLIC_RESTAURANT_ID;
+  process.env.NEXT_PUBLIC_RESTAURANT_ID ?? '53591ab9-ac4e-4841-958b-d38853a90f0b';
 
 export const TENANT_ID =
-  process.env.NEXT_PUBLIC_TENANT_ID;
+  process.env.NEXT_PUBLIC_TENANT_ID ?? 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
 export const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ??
@@ -23,11 +22,8 @@ if (typeof window !== 'undefined') {
 
 // ── Menu endpoints ─────────────────────────────────────────────────────────────
 export const MENU_API = {
-  /** GET all items | POST new item */
   items: (rid = RESTAURANT_ID) =>
     `${API_BASE}/menus/restaurants/${rid}/items`,
-
-  /** GET by id | PUT update | DELETE */
   item: (itemId: string, rid = RESTAURANT_ID) =>
     `${API_BASE}/menus/restaurants/${rid}/items/${itemId}`,
 };
@@ -73,21 +69,14 @@ export async function apiFetch<T>(
 // ── Orders (KDS) endpoints ─────────────────────────────────────────────────────
 export const ORDERS_API_BASE = 'https://rz0z72aem4.execute-api.us-east-1.amazonaws.com/Prod';
 
-export const TENANT_ID_KDS    = process.env.NEXT_PUBLIC_TENANT_ID_KDS;
-export const RESTAURANT_ID_KDS = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS;
+export const TENANT_ID_KDS     = process.env.NEXT_PUBLIC_TENANT_ID_KDS     ?? 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
+export const RESTAURANT_ID_KDS = process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS ?? '2687382e-3b00-4f57-9014-f484df89e3fe';
 
 export const ORDERS_API = {
-  /** GET all orders */
   list: () =>
     `${ORDERS_API_BASE}/orders?tenantId=${TENANT_ID_KDS}&restaurantId=${RESTAURANT_ID_KDS}`,
-
-  /** GET single order */
   get: (orderId: string) =>
     `${ORDERS_API_BASE}/orders/${orderId}?tenantId=${TENANT_ID_KDS}`,
-
-  /** POST create order */
   create: () => `${ORDERS_API_BASE}/orders`,
-
-  /** PATCH update order */
-  patch: (orderId: string) => `${ORDERS_API_BASE}/orders/${orderId}`,
+  patch:  (orderId: string) => `${ORDERS_API_BASE}/orders/${orderId}`,
 };
