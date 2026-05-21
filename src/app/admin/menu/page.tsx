@@ -11,7 +11,6 @@ import {
   fetchMenuItems,
   createMenuItem,
   updateMenuItem,
-  deleteMenuItem,
   normaliseItem,
   type ApiMenuItem,
 } from '@/lib/menu-api';
@@ -44,31 +43,27 @@ export default function AdminMenuPage() {
 
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadName, setUploadName] = useState<string | null>(null);
-  const [glbFile,     setGlbFile]     = useState<File | null>(null);
-  const [glbName,     setGlbName]     = useState<string | null>(null);
-  const [glbStatus,   setGlbStatus]   = useState<GlbStatus>('idle');
-  const [glbError,    setGlbError]    = useState('');
-  const [glbProgress, setGlbProgress] = useState(0);
+  const [glbFile,    setGlbFile]    = useState<File | null>(null);
+  const [glbName,    setGlbName]    = useState<string | null>(null);
+  const [glbStatus,  setGlbStatus]  = useState<GlbStatus>('idle');
+  const [glbError,   setGlbError]   = useState('');
+  const [glbProgress,setGlbProgress]= useState(0);
 
   const [form, setForm] = useState({
     name: '', description: '', price: '', category: '',
     prepTime: '', calories: '',
   });
 
-  // ── Load items ────────────────────────────────────────────────────────────────
   const loadItems = useCallback(async () => {
-    setLoadState('loading');
-    setLoadError('');
+    setLoadState('loading'); setLoadError('');
     try {
       const raw = await fetchMenuItems(ADMIN_RESTAURANT_ID);
       const normalised = raw.map(normaliseItem);
       setItems(normalised);
       const seen = new Map<string, string>();
       raw.forEach((r: any) => {
-        const id   = r.categoryId ?? '';
-        const KNOWN: Record<string, string> = {
-          'e933848e-0d18-4e3a-b0a8-d70275c2fa54': 'Main Course',
-        };
+        const id = r.categoryId ?? '';
+        const KNOWN: Record<string,string> = { 'e933848e-0d18-4e3a-b0a8-d70275c2fa54': 'Main Course' };
         const name = r.categoryName ?? KNOWN[id] ?? (r.category && !r.category.includes('-') ? r.category : `Cat-${id.slice(0,6)}`);
         if (id && id.includes('-')) seen.set(id, name);
       });
@@ -79,30 +74,21 @@ export default function AdminMenuPage() {
       }
       setLoadState('success');
     } catch (err: any) {
-      setLoadError(err?.message ?? 'Failed to load menu items');
-      setLoadState('error');
+      setLoadError(err?.message ?? 'Failed to load'); setLoadState('error');
     }
   }, []);
 
   useEffect(() => { loadItems(); }, [loadItems]);
 
-  // ── Filtered + stats ──────────────────────────────────────────────────────────
   const filtered = items.filter(item => {
-    if (item.status === 'inactive') return false; // hide inactive from table
-    const mc = category === 'all'
-      || (item as any).categoryId === category
-      || item.category === category;
-    const ms = item.name.toLowerCase().includes(search.toLowerCase());
-    return mc && ms;
+    if (item.status === 'inactive') return false;
+    const mc = category === 'all' || (item as any).categoryId === category || item.category === category;
+    return mc && item.name.toLowerCase().includes(search.toLowerCase());
   });
 
   const activeItems = items.filter(i => i.status === 'active');
-  const stats = {
-    total:  activeItems.length,
-    active: activeItems.length,
-  };
+  const stats = { total: activeItems.length, active: activeItems.length };
 
-  // ── Open modal ────────────────────────────────────────────────────────────────
   const openModal = (item?: ApiMenuItem) => {
     setModal({ open: true, item });
     setIsActive(item ? item.status === 'active' : true);
@@ -111,37 +97,33 @@ export default function AdminMenuPage() {
     setGlbFile(null); setGlbName(null);
     setGlbStatus('idle'); setGlbError(''); setGlbProgress(0);
     setSaveMsg(''); setSaveErr('');
-    const defaultCat = (item as any)?.categoryId ?? item?.category ?? cats[0]?.id ?? '';
     setForm({
       name:        item?.name        ?? '',
       description: item?.description ?? '',
       price:       item?.price       ? String(item.price) : '',
-      category:    defaultCat,
+      category:    (item as any)?.categoryId ?? item?.category ?? cats[0]?.id ?? '',
       prepTime:    item?.prepTime    ?? '',
       calories:    item?.calories    ? String(item.calories) : '',
     });
   };
 
-  const uploadToS3 = async (presignedUrl: string, file: File, contentType: string) => {
-    const res = await fetch(presignedUrl, { method: 'PUT', headers: { 'Content-Type': contentType }, body: file });
+  const uploadToS3 = async (url: string, file: File, ct: string) => {
+    const res = await fetch(url, { method: 'PUT', headers: { 'Content-Type': ct }, body: file });
     if (!res.ok) throw new Error(`S3 upload failed (${res.status})`);
   };
 
-  // ── Save (create or update) ───────────────────────────────────────────────────
   const saveItem = async () => {
     if (!form.name.trim() || !form.price) { setSaveErr('Name and price are required.'); return; }
     if (!form.category) { setSaveErr('Please select a category.'); return; }
     setSaving(true); setSaveMsg(''); setSaveErr('');
 
     const payload: Partial<ApiMenuItem> = {
-      name:        form.name.trim(),
-      description: form.description.trim(),
-      price:       parseFloat(form.price),
-      categoryId:  form.category,
-      status:      isActive ? 'active' : 'inactive',
-      tags:        isChef ? ['chef'] : [],
-      prepTime:    form.prepTime || '20 min',
-      calories:    form.calories ? parseInt(form.calories) : undefined,
+      name: form.name.trim(), description: form.description.trim(),
+      price: parseFloat(form.price), categoryId: form.category,
+      status: isActive ? 'active' : 'inactive',
+      tags: isChef ? ['chef'] : [],
+      prepTime: form.prepTime || '20 min',
+      calories: form.calories ? parseInt(form.calories) : undefined,
     };
 
     try {
@@ -152,8 +134,6 @@ export default function AdminMenuPage() {
         raw = await updateMenuItem(modal.item.id, payload, version);
         setItems(prev => prev.map(i => i.id === (raw.id ?? raw.itemId) ? normaliseItem(raw) : i));
         setSaveMsg('Item updated successfully!');
-
-        // GLB upload via AR API works for all items, no presigned URL needed
       } else {
         raw = await createMenuItem(payload);
         setItems(prev => [...prev, normaliseItem(raw)]);
@@ -165,13 +145,14 @@ export default function AdminMenuPage() {
           const version = raw.version ?? 1;
           const refreshed = await updateMenuItem(itemId, {
             name: raw.name, description: raw.description,
-            categoryId: raw.categoryId, status: raw.isActive ? 'active' : 'inactive',
+            categoryId: raw.categoryId,
+            status: raw.isActive ? 'active' : 'inactive',
             price: (raw.priceMinorUnits ?? 0) / 100,
           }, version);
           raw = { ...raw, ...refreshed };
-          const normRefreshed = normaliseItem(raw);
-          setItems(prev => prev.map(i => i.id === normRefreshed.id ? normRefreshed : i));
-          setModal(prev => ({ ...prev, item: normRefreshed }));
+          const nr = normaliseItem(raw);
+          setItems(prev => prev.map(i => i.id === nr.id ? nr : i));
+          setModal(prev => ({ ...prev, item: nr }));
         }
       }
 
@@ -182,129 +163,80 @@ export default function AdminMenuPage() {
         setTimeout(() => loadItems(), 1500);
       }
 
-      if (glbFile) {
-        const itemId    = raw.itemId ?? raw.id;
-        const RID       = ADMIN_RESTAURANT_ID;
-        const uploadUrl = raw.arModelUrl; // presigned S3 PUT URL from menu API
-
-        if (!uploadUrl) {
-          setGlbStatus('error');
-          setGlbError('No S3 upload URL available. Create the item fresh with the GLB file selected from the start.');
-          setSaving(false);
-          return;
-        }
-
+      if (glbFile && raw.arModelUrl) {
         setSaveMsg('Uploading 3D model…');
-        setGlbStatus('uploading'); setGlbProgress(40);
-        await uploadToS3(uploadUrl, glbFile, 'model/gltf-binary');
-
-        setGlbProgress(70); setSaveMsg('Validating 3D model…'); setGlbStatus('validating');
-        let approved = false;
-        for (let i = 0; i < 12; i++) {
-          await new Promise(r => setTimeout(r, 5000));
-          setGlbProgress(70 + ((i + 1) / 12) * 30);
-          const checkRes = await fetch(
-            `/api/ar?rid=${encodeURIComponent(RID)}&iid=${encodeURIComponent(itemId)}`,
-            { cache: 'no-store' }
-          );
-          if (checkRes.ok) {
-            setGlbProgress(100); setGlbStatus('approved');
-            setSaveMsg('3D model approved & live!'); approved = true;
-            setTimeout(() => loadItems(), 1000);
-            break;
-          }
-        }
-        if (!approved) { setGlbStatus('rejected'); setGlbError('Validation timed out.'); }
+        setGlbStatus('uploading'); setGlbProgress(50);
+        await uploadToS3(raw.arModelUrl, glbFile, 'model/gltf-binary');
+        setGlbProgress(100); setGlbStatus('approved');
+        setSaveMsg('3D model uploaded!');
+        setTimeout(() => loadItems(), 1000);
         return;
       }
 
       setTimeout(() => { setModal({ open: false }); setSaveMsg(''); }, 1200);
     } catch (err: any) {
       setSaveErr(err?.message ?? 'Save failed.');
-      if (glbStatus === 'uploading' || glbStatus === 'validating') { setGlbStatus('error'); setGlbError(err?.message ?? 'Upload failed'); }
+      if (glbStatus === 'uploading') { setGlbStatus('error'); setGlbError(err?.message ?? 'Upload failed'); }
     } finally {
       setSaving(false);
     }
   };
 
-  // ── Deactivate (API has no DELETE permission) ─────────────────────────────────
   const handleDelete = async (id: string) => {
-    if (!confirm('Mark this item as INACTIVE? (API does not allow permanent deletion)')) return;
+    if (!confirm('Remove this item from the menu?')) return;
     setDeleting(id);
     try {
-      // Fetch latest item to get current version
       const { fetchMenuItem } = await import('@/lib/menu-api');
-      const latest = await fetchMenuItem(id, ADMIN_RESTAURANT_ID);
-      const version = (latest as any).version ?? 1;
-
-      // Use updateMenuItem which correctly goes through apiFetch with headers
+      const latest = await fetchMenuItem(id, ADMIN_RESTAURANT_ID) as any;
       await updateMenuItem(id, {
-        name:        (latest as any).name,
-        description: (latest as any).description ?? '',
-        categoryId:  (latest as any).categoryId,
-        price:       ((latest as any).priceMinorUnits ?? 0) / 100,
-        status:      'inactive',
-      }, version);
-
-      setItems(prev => prev.map(i => i.id === id ? { ...i, status: 'inactive' } : i));
-      setTimeout(() => loadItems(), 800);
+        name: latest.name, description: latest.description ?? '',
+        categoryId: latest.categoryId,
+        price: (latest.priceMinorUnits ?? 0) / 100,
+        status: 'inactive',
+      }, latest.version ?? 1);
+      setItems(prev => prev.filter(i => i.id !== id));
     } catch (err: any) {
-      alert(`Failed to deactivate: ${err?.message}`);
+      alert(`Failed: ${err?.message}`);
     } finally {
       setDeleting(null);
     }
   };
 
-  // ── Delete & Recreate ─────────────────────────────────────────────────────────
   const handleRecreate = async () => {
     if (!modal.item) return;
-    if (!confirm('Deactivate old item and create a fresh one with files? Continue?')) return;
+    if (!confirm('Deactivate old item and create fresh with files? Continue?')) return;
     setSaving(true); setSaveErr(''); setSaveMsg('Deactivating old item…');
     try {
       const { fetchMenuItem } = await import('@/lib/menu-api');
-      const latest = await fetchMenuItem(modal.item.id, ADMIN_RESTAURANT_ID);
-      const oldVersion = (latest as any).version ?? 1;
+      const latest = await fetchMenuItem(modal.item.id, ADMIN_RESTAURANT_ID) as any;
       await updateMenuItem(modal.item.id, {
-        name:        (latest as any).name,
-        description: (latest as any).description ?? '',
-        categoryId:  (latest as any).categoryId,
-        price:       ((latest as any).priceMinorUnits ?? 0) / 100,
-        status:      'inactive',
-      }, oldVersion);
-      setItems(prev => prev.map(i => i.id === modal.item!.id ? { ...i, status: 'inactive' } : i));
+        name: latest.name, description: latest.description ?? '',
+        categoryId: latest.categoryId,
+        price: (latest.priceMinorUnits ?? 0) / 100,
+        status: 'inactive',
+      }, latest.version ?? 1);
+      setItems(prev => prev.filter(i => i.id !== modal.item!.id));
       setSaveMsg('Creating fresh item…');
-      const payload: Partial<ApiMenuItem> = {
+      let raw: any = await createMenuItem({
         name: form.name.trim(), description: form.description.trim(),
         price: parseFloat(form.price), categoryId: form.category,
         status: 'active', tags: isChef ? ['chef'] : [],
         prepTime: form.prepTime || '20 min',
         calories: form.calories ? parseInt(form.calories) : undefined,
-      };
-      let raw: any = await createMenuItem(payload);
+      });
       setItems(prev => [...prev, normaliseItem(raw)]);
-      setSaveMsg('Item created! Uploading files…');
+      setSaveMsg('Created! Uploading files…');
       if (uploadFile && raw.imageUrl) {
         await uploadToS3(raw.imageUrl, uploadFile, uploadFile.type || 'image/png');
         setSaveMsg('Image uploaded!');
-        setTimeout(() => loadItems(), 1500);
       }
       if (glbFile && raw.arModelUrl) {
-        const itemId = raw.itemId ?? raw.id;
-        const RID    = ADMIN_RESTAURANT_ID;
-        setGlbStatus('uploading'); setGlbProgress(40);
+        setGlbStatus('uploading'); setGlbProgress(50);
         await uploadToS3(raw.arModelUrl, glbFile, 'model/gltf-binary');
-        setGlbProgress(70); setGlbStatus('validating'); setSaveMsg('Validating 3D model…');
-        let approved = false;
-        for (let i = 0; i < 12; i++) {
-          await new Promise(r => setTimeout(r, 5000));
-          setGlbProgress(70 + ((i + 1) / 12) * 30);
-          const checkRes = await fetch(`/api/ar?rid=${encodeURIComponent(RID)}&iid=${encodeURIComponent(itemId)}`, { cache: 'no-store' });
-          if (checkRes.ok) { setGlbProgress(100); setGlbStatus('approved'); setSaveMsg('3D model approved!'); approved = true; setTimeout(() => loadItems(), 1000); break; }
-        }
-        if (!approved) { setGlbStatus('rejected'); setGlbError('Validation timed out.'); }
-        return;
+        setGlbProgress(100); setGlbStatus('approved');
+        setSaveMsg('3D model uploaded!');
       }
-      setTimeout(() => { setModal({ open: false }); setSaveMsg(''); }, 1200);
+      setTimeout(() => { setModal({ open: false }); loadItems(); }, 1500);
     } catch (err: any) {
       setSaveErr(err?.message ?? 'Recreate failed.');
     } finally {
@@ -314,7 +246,6 @@ export default function AdminMenuPage() {
 
   return (
     <>
-      {/* Top bar */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-[#14b8a6]">
         <div>
           <h1 className="font-serif text-[20px] text-ink-900 font-semibold">Menu Management</h1>
@@ -326,7 +257,7 @@ export default function AdminMenuPage() {
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search items…"
               className="h-9 pl-8 pr-3 rounded-xl w-[200px] text-[13px] border-ink-200" />
           </div>
-          <button onClick={loadItems} title="Refresh from API"
+          <button onClick={loadItems} title="Refresh"
             className="w-9 h-9 rounded-xl bg-[#14b8a60f] border border-[#14b8a6] flex items-center justify-center hover:bg-ink-100 transition-colors">
             <RefreshCw size={14} className={`text-ink-400 ${loadState === 'loading' ? 'animate-spin' : ''}`} />
           </button>
@@ -348,11 +279,10 @@ export default function AdminMenuPage() {
               <p className="text-[13px] font-semibold text-red-700">Failed to load menu items</p>
               <p className="text-[12px] text-red-500">{loadError}</p>
             </div>
-            <button onClick={loadItems} className="px-3 py-1.5 rounded-xl bg-red-100 border border-red-200 text-red-700 text-[12px] font-semibold hover:bg-red-200 transition-colors">Retry</button>
+            <button onClick={loadItems} className="px-3 py-1.5 rounded-xl bg-red-100 border border-red-200 text-red-700 text-[12px] font-semibold">Retry</button>
           </div>
         )}
 
-        {/* Stats */}
         <div className="grid grid-cols-2 gap-3 mb-6" style={{maxWidth:'480px'}}>
           {STATS_LABELS.map(s => (
             <div key={s.label} className="bg-[#14b8a60f] border border-[#14b8a6] rounded-2xl p-4 shadow-card">
@@ -364,48 +294,37 @@ export default function AdminMenuPage() {
           ))}
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-1 bg-ink-100 rounded-xl p-1 mb-5 w-fit">
-          {['All Items', 'Active', 'Inactive', 'Drafts'].map((t, i) => (
-            <button key={t} className={`px-5 h-8 rounded-[10px] text-[12px] font-semibold transition-all ${i === 0 ? 'bg-white text-black shadow-card' : 'text-ink-400 hover:text-ink-700'}`}>{t}</button>
-          ))}
-        </div>
-
-        {/* Category filter — dynamic from API */}
         <div className="flex gap-2 mb-4 flex-wrap">
           <button onClick={() => setCategory('all')}
-            className={`px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-all ${category === 'all' ? 'bg-brand-500 border-brand-500 text-white shadow-brand' : 'bg-white border-ink-200 text-black hover:border-brand-300'}`}>
+            className={`px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-all ${category === 'all' ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-ink-200 text-black hover:border-brand-300'}`}>
             🍽️ All
           </button>
           {cats.map(cat => (
             <button key={cat.id} onClick={() => setCategory(cat.id)}
-              className={`px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-all ${category === cat.id ? 'bg-brand-500 border-brand-500 text-white shadow-brand' : 'bg-white border-ink-200 text-black hover:border-brand-300'}`}>
+              className={`px-3 py-1.5 rounded-full border text-[12px] font-semibold transition-all ${category === cat.id ? 'bg-brand-500 border-brand-500 text-white' : 'bg-white border-ink-200 text-black hover:border-brand-300'}`}>
               {cat.name}
             </button>
           ))}
         </div>
 
-        {/* Loading skeleton */}
         {loadState === 'loading' && (
-          <div className="bg-[#14b8a60f] border border-[#14b8a6] rounded-2xl overflow-hidden shadow-card">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-4 px-4 py-4 border border-[#14b8a6] last:border-0">
+          <div className="bg-[#14b8a60f] border border-[#14b8a6] rounded-2xl overflow-hidden">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4 px-4 py-4 border-b border-[#14b8a6] last:border-0">
                 <div className="w-10 h-10 rounded-xl bg-ink-100 animate-pulse flex-shrink-0" />
                 <div className="flex-1 space-y-2">
                   <div className="h-3 bg-ink-100 rounded animate-pulse w-1/3" />
                   <div className="h-2.5 bg-ink-50 rounded animate-pulse w-1/2" />
                 </div>
-                <div className="h-3 bg-ink-100 rounded animate-pulse w-16" />
-                <div className="h-3 bg-ink-100 rounded animate-pulse w-14" />
               </div>
             ))}
           </div>
         )}
 
-        {/* Table */}
         {loadState !== 'loading' && (
           <div className="bg-[#14b8a60f] border border-[#14b8a6] rounded-2xl overflow-hidden shadow-card">
-            <div className="grid gap-3 px-4 py-3 border-b border-[#14b8a6]" style={{ gridTemplateColumns: '40px 1fr 120px 80px 80px 90px 80px' }}>
+            <div className="grid gap-3 px-4 py-3 border-b border-[#14b8a6]"
+              style={{ gridTemplateColumns: '40px 1fr 120px 80px 80px 90px 80px' }}>
               {['', 'Item', 'Category', 'Price', 'Rating', 'Status', 'Actions'].map(h => (
                 <div key={h} className="text-[11px] text-ink-400 uppercase tracking-widest font-semibold">{h}</div>
               ))}
@@ -415,49 +334,53 @@ export default function AdminMenuPage() {
               <div className="flex flex-col items-center justify-center py-12 gap-3">
                 <span className="text-4xl opacity-30">🍽️</span>
                 <p className="text-[13px] text-ink-400">No items found</p>
-                <button onClick={() => openModal()} className="px-4 py-2 rounded-xl bg-brand-50 border border-brand-200 text-brand-700 text-[13px] font-semibold hover:bg-brand-100 transition-colors">Add First Item</button>
+                <button onClick={() => openModal()} className="px-4 py-2 rounded-xl bg-brand-50 border border-brand-200 text-brand-700 text-[13px] font-semibold">Add First Item</button>
               </div>
             )}
 
             {filtered.map((item, idx) => (
               <div key={item.id ?? `item-${idx}`}
-                className="grid gap-3 px-4 py-3.5 border-b border-[#14b8a6] last:border-0 items-center hover:bg-ink-50 transition-colors cursor-pointer"
+                className="grid gap-3 px-4 py-3.5 border-b border-[#14b8a6] last:border-0 items-center hover:bg-ink-50 transition-colors"
                 style={{ gridTemplateColumns: '40px 1fr 120px 80px 80px 90px 80px' }}>
                 <div className="w-10 h-10 rounded-xl bg-brand-50 flex items-center justify-center text-[22px] overflow-hidden">
-                  {(item as any).imageUrl ? <img src={(item as any).imageUrl} alt={item.name} className="w-full h-full object-cover rounded-xl" /> : item.emoji}
+                  {(item as any).imageUrl
+                    ? <img src={(item as any).imageUrl} alt={item.name} className="w-full h-full object-cover rounded-xl" />
+                    : item.emoji}
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
                     <p className="text-[13px] font-semibold text-ink-900 truncate">{item.name}</p>
-                    {(item as any).hasArModel && <span className="text-[9px] bg-purple-100 border border-purple-200 text-purple-600 px-1.5 py-0.5 rounded-full font-bold flex-shrink-0">3D</span>}
+                    {(item as any).hasArModel && (
+                      <span className="text-[9px] bg-purple-100 border border-purple-200 text-purple-600 px-1.5 py-0.5 rounded-full font-bold flex-shrink-0">3D</span>
+                    )}
                   </div>
                   <p className="text-[11px] text-ink-400 truncate">{item.description}</p>
                 </div>
-                <div className="text-[12px] text-ink-500 font-medium capitalize">{item.category}</div>
+                <div className="text-[12px] text-ink-500 font-medium">{item.category}</div>
                 <div className="font-serif text-[13px] text-brand-600 font-semibold">{formatPrice(item.price)}</div>
                 <div className="flex items-center gap-1 text-[12px] text-amber-500 font-medium">★ {item.rating?.toFixed(1) ?? '—'}</div>
                 <div><StatusChip status={item.status} /></div>
                 <div className="flex gap-1.5">
-                  <button onClick={() => openModal(item)} className="w-7 h-7 rounded-lg bg-ink-50 border border-ink-200 flex items-center justify-center hover:bg-brand-50 hover:border-brand-200 transition-all">
+                  <button onClick={() => openModal(item)}
+                    className="w-7 h-7 rounded-lg bg-ink-50 border border-ink-200 flex items-center justify-center hover:bg-brand-50 hover:border-brand-200 transition-all">
                     <Edit2 size={12} className="text-ink-400" />
                   </button>
-                  <button onClick={() => handleDelete(item.id)} disabled={deleting === item.id} title="Deactivate item"
+                  <button onClick={() => handleDelete(item.id)} disabled={deleting === item.id} title="Remove item"
                     className="w-7 h-7 rounded-lg bg-ink-50 border border-ink-200 flex items-center justify-center hover:bg-red-50 hover:border-red-200 transition-all disabled:opacity-50">
-                    {deleting === item.id ? <Loader2 size={12} className="text-ink-400 animate-spin" /> : <Trash2 size={12} className="text-ink-400" />}
+                    {deleting === item.id ? <Loader2 size={12} className="animate-spin text-ink-400" /> : <Trash2 size={12} className="text-ink-400" />}
                   </button>
                 </div>
               </div>
             ))}
 
             <div className="flex items-center justify-between px-4 py-3.5 border-t border-[#14b8a6]">
-              <p className="text-[12px] text-ink-400">Showing {filtered.length} of {items.length} items</p>
-              <p className="text-[11px] text-ink-300 font-mono-dm">Source: AWS API Gateway</p>
+              <p className="text-[12px] text-ink-400">Showing {filtered.length} of {activeItems.length} active items</p>
+              <p className="text-[11px] text-ink-300">Source: AWS API Gateway</p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Modal */}
       {modal.open && (
         <div className="fixed inset-0 bg-ink-900/20 backdrop-blur-sm flex items-center justify-center z-50 p-6"
           onClick={e => e.target === e.currentTarget && setModal({ open: false })}>
@@ -465,7 +388,7 @@ export default function AdminMenuPage() {
             <div className="flex items-center justify-between mb-5">
               <div>
                 <h2 className="font-serif text-[18px] text-ink-900 font-semibold">{modal.item ? 'Edit Menu Item' : 'Add Menu Item'}</h2>
-                <p className="text-[11px] text-ink-400 mt-0.5">{modal.item ? `ID: ${modal.item.id?.slice(0, 8)}…` : 'POST to AWS API Gateway'}</p>
+                <p className="text-[11px] text-ink-400 mt-0.5">{modal.item ? `ID: ${modal.item.id?.slice(0,8)}…` : 'POST to AWS API Gateway'}</p>
               </div>
               <button onClick={() => setModal({ open: false })} className="w-8 h-8 rounded-xl bg-ink-50 border border-ink-200 flex items-center justify-center">
                 <X size={14} className="text-ink-500" />
@@ -477,7 +400,7 @@ export default function AdminMenuPage() {
 
             <div className="mb-4">
               <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">Item Name *</label>
-              <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Grilled Sea Bass" className="w-full h-10 text-[13px]" />
+              <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Chicken Karahi" className="w-full h-10 text-[13px]" />
             </div>
 
             <div className="grid grid-cols-2 gap-3 mb-4">
@@ -514,61 +437,83 @@ export default function AdminMenuPage() {
             {/* Image Upload */}
             <div className="mb-4">
               <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">
-                Item Image (S3 Upload)
+                Item Image
                 {modal.item && !(modal.item as any).imageKey && <span className="ml-2 text-amber-500 normal-case font-normal">— no image yet</span>}
                 {modal.item && (modal.item as any).imageKey && <span className="ml-2 text-green-600 normal-case font-normal">✓ uploaded</span>}
               </label>
               <label className="flex flex-col items-center gap-2 p-5 rounded-2xl border-2 border-dashed border-ink-200 bg-ink-50 cursor-pointer hover:border-brand-300 hover:bg-brand-50 transition-all">
                 <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0] ?? null; setUploadFile(f); setUploadName(f?.name ?? null); }} />
                 <CloudUpload size={26} className={uploadName ? 'text-brand-500' : 'text-ink-300'} />
-                <span className={`text-[12px] font-medium ${uploadName ? 'text-brand-600' : 'text-ink-400'}`}>{uploadName ? `✓ ${uploadName}` : 'Click to upload · PNG, JPG up to 5MB'}</span>
+                <span className={`text-[12px] font-medium ${uploadName ? 'text-brand-600' : 'text-ink-400'}`}>
+                  {uploadName ? `✓ ${uploadName}` : 'Click to upload · PNG, JPG'}
+                </span>
               </label>
             </div>
 
             {/* GLB Upload */}
             <div className="mb-4">
               <label className="block text-[11px] text-ink-500 uppercase tracking-widest font-semibold mb-1.5">
-                3D AR Model (.glb) — S3 Upload
+                3D AR Model (.glb)
                 {modal.item && !(modal.item as any).arModelKey && <span className="ml-2 text-amber-500 normal-case font-normal">— no model yet</span>}
                 {modal.item && (modal.item as any).arModelKey && <span className="ml-2 text-green-600 normal-case font-normal">✓ uploaded</span>}
               </label>
+
               {glbStatus === 'idle' && (
                 <label className="flex flex-col items-center gap-2 p-5 rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/30 cursor-pointer hover:border-purple-400 hover:bg-purple-50 transition-all">
                   <input type="file" accept=".glb,.gltf" className="hidden" onChange={e => { const f = e.target.files?.[0] ?? null; setGlbFile(f); setGlbName(f?.name ?? null); setGlbError(''); }} />
                   <span className="text-2xl">🫙</span>
-                  <span className={`text-[12px] font-medium ${glbName ? 'text-purple-700' : 'text-ink-400'}`}>{glbName ? `✓ ${glbName}` : 'Click to upload · .glb / .gltf · max 50MB'}</span>
-                  {glbName && <span className="text-[11px] text-purple-500">Will upload to S3 when you save</span>}
+                  <span className={`text-[12px] font-medium ${glbName ? 'text-purple-700' : 'text-ink-400'}`}>
+                    {glbName ? `✓ ${glbName}` : 'Click to upload · .glb / .gltf'}
+                  </span>
+                  {glbName && <span className="text-[11px] text-purple-500">Uploads to S3 when you save</span>}
                 </label>
               )}
+
               {glbStatus === 'uploading' && (
                 <div className="p-4 rounded-2xl border-2 border-dashed border-purple-300 bg-purple-50/30">
-                  <div className="flex items-center gap-2 mb-2"><Loader2 size={13} className="animate-spin text-purple-500" /><span className="text-[12px] text-purple-700 font-medium">Uploading to S3…</span><span className="ml-auto text-[11px] text-purple-500 font-mono-dm">{Math.round(glbProgress)}%</span></div>
-                  <div className="h-1.5 bg-purple-200 rounded-full overflow-hidden"><div className="h-full bg-purple-500 rounded-full transition-all duration-300" style={{ width: `${glbProgress}%` }} /></div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Loader2 size={13} className="animate-spin text-purple-500" />
+                    <span className="text-[12px] text-purple-700 font-medium">Uploading to S3…</span>
+                    <span className="ml-auto text-[11px] text-purple-500">{Math.round(glbProgress)}%</span>
+                  </div>
+                  <div className="h-1.5 bg-purple-200 rounded-full overflow-hidden">
+                    <div className="h-full bg-purple-500 rounded-full transition-all duration-300" style={{ width: `${glbProgress}%` }} />
+                  </div>
                 </div>
               )}
 
               {glbStatus === 'approved' && (
                 <div className="p-4 rounded-2xl border-2 border-dashed border-green-300 bg-green-50/30 flex items-center gap-3">
                   <CheckCircle size={20} className="text-green-500 flex-shrink-0" />
-                  <div><p className="text-[12px] text-green-700 font-semibold">✓ 3D Model Uploaded</p><p className="text-[11px] text-green-600 mt-0.5">Refresh page to see AR badge</p></div>
+                  <div>
+                    <p className="text-[12px] text-green-700 font-semibold">✓ 3D Model Uploaded</p>
+                    <p className="text-[11px] text-green-600 mt-0.5">Refresh to see AR badge on item</p>
+                  </div>
                 </div>
               )}
+
               {glbStatus === 'error' && (
                 <div className="p-4 rounded-2xl border-2 border-dashed border-red-300 bg-red-50/30">
-                  <div className="flex items-center gap-2 mb-1"><AlertCircle size={14} className="text-red-500 flex-shrink-0" /><p className="text-[12px] text-red-700 font-semibold">'Upload Error'</p></div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <AlertCircle size={14} className="text-red-500 flex-shrink-0" />
+                    <p className="text-[12px] text-red-700 font-semibold">Upload Error</p>
+                  </div>
                   <p className="text-[11px] text-red-500 mb-2">{glbError}</p>
-                  <button onClick={() => { setGlbStatus('idle'); setGlbFile(null); setGlbName(null); }} className="text-[11px] text-red-600 underline">Try a different file</button>
+                  <button onClick={() => { setGlbStatus('idle'); setGlbFile(null); setGlbName(null); }} className="text-[11px] text-red-600 underline">Try again</button>
                 </div>
               )}
             </div>
 
-            {/* Recreate button for items without imageKey */}
-            {modal.item && !(modal.item as any).imageKey && (uploadFile || glbFile) && (
+            {/* Recreate button — for existing items without S3 slot */}
+            {modal.item && (uploadFile || glbFile) &&
+             (!(modal.item as any).imageKey || !(modal.item as any).arModelKey) && (
               <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl">
-                <p className="text-[11px] text-amber-700 font-semibold mb-2">⚠ This item has no S3 slot. Recreate to upload files.</p>
+                <p className="text-[11px] text-amber-700 font-semibold mb-2">
+                  ⚠ This item has no S3 slot for {!( modal.item as any).imageKey ? 'image' : '3D model'}. Recreate to upload files.
+                </p>
                 <button onClick={handleRecreate} disabled={saving}
-                  className="w-full h-9 rounded-xl bg-amber-500 text-white text-[12px] font-semibold flex items-center justify-center gap-1.5 hover:bg-amber-600 transition-colors disabled:opacity-60">
-                  {saving ? <><Loader2 size={13} className="animate-spin" /> {saveMsg}</> : '🔄 Deactivate Old & Create Fresh'}
+                  className="w-full h-9 rounded-xl bg-amber-500 text-white text-[12px] font-semibold flex items-center justify-center gap-1.5 hover:bg-amber-600 disabled:opacity-60">
+                  {saving ? <><Loader2 size={13} className="animate-spin" /> {saveMsg}</> : '🔄 Recreate & Upload Files'}
                 </button>
               </div>
             )}
@@ -584,13 +529,13 @@ export default function AdminMenuPage() {
 
             <div className="mt-3 p-3 bg-ink-50 border border-ink-100 rounded-xl">
               <p className="text-[10px] text-ink-400 uppercase tracking-widest font-semibold mb-1.5">{modal.item ? 'PUT' : 'POST'} Payload Preview</p>
-              <p className="text-[10px] text-ink-500 font-mono-dm break-all">{`{ name: "${form.name || '…'}", price: ${form.price || 0}, categoryId: "${form.category.slice(0,8)}…", status: "${isActive ? 'active' : 'inactive'}" }`}</p>
+              <p className="text-[10px] text-ink-500 break-all">{`{ name: "${form.name||'…'}", price: ${form.price||0}, categoryId: "${form.category.slice(0,8)}…", status: "${isActive?'active':'inactive'}" }`}</p>
             </div>
 
             <div className="flex gap-2 mt-4">
-              <button onClick={() => setModal({ open: false })} className="flex-1 h-10 rounded-xl bg-ink-50 border border-ink-200 text-[13px] font-semibold text-ink-500 hover:bg-ink-100 transition-colors">Cancel</button>
+              <button onClick={() => setModal({ open: false })} className="flex-1 h-10 rounded-xl bg-ink-50 border border-ink-200 text-[13px] font-semibold text-ink-500 hover:bg-ink-100">Cancel</button>
               <button onClick={saveItem} disabled={saving || glbStatus === 'uploading'}
-                className="flex-[2] h-10 rounded-xl flex items-center justify-center gap-1.5 text-[13px] font-semibold transition-all bg-brand-500 text-white hover:bg-brand-600 shadow-brand disabled:opacity-60">
+                className="flex-[2] h-10 rounded-xl flex items-center justify-center gap-1.5 text-[13px] font-semibold bg-brand-500 text-white hover:bg-brand-600 shadow-brand disabled:opacity-60">
                 {saving || glbStatus === 'uploading'
                   ? <><Loader2 size={14} className="animate-spin" /> {saveMsg || 'Saving…'}</>
                   : modal.item ? '✓ Update Item' : '✓ Create Item'}
