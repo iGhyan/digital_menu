@@ -217,7 +217,7 @@ export default function AdminMenuPage() {
         setGlbStatus('validating');
 
         // Poll AR API to check validator status (every 5s, up to 60s)
-        const RID     = process.env.NEXT_PUBLIC_RESTAURANT_ID;
+        const RID = process.env.NEXT_PUBLIC_RESTAURANT_ID || '2687382e-3b00-4f57-9014-f484df89e3fe';
         const itemId  = raw.itemId ?? raw.id;
         let approved  = false;
 
