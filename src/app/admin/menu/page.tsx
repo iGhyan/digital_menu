@@ -225,7 +225,7 @@ export default function AdminMenuPage() {
           await new Promise(r => setTimeout(r, 5000));
           setGlbProgress(70 + ((i + 1) / 12) * 30);
           const checkRes = await fetch(
-            `/api/ar?rid=${encodeURIComponent(RID)}&iid=${encodeURIComponent(itemId)}`,
+            `/api/ar?rid=${encodeURIComponent(RID ?? '')}&iid=${encodeURIComponent(itemId ?? '')}`,
             { cache: 'no-store' }
           );
           if (checkRes.ok) {
