@@ -42,7 +42,7 @@ export default function ItemDetailPage() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    const menuRid = process.env.NEXT_PUBLIC_RESTAURANT_ID || '2687382e-3b00-4f57-9014-f484df89e3fe';
+    const menuRid = process.env.NEXT_PUBLIC_RESTAURANT_ID;
     fetchMenuItem(id, menuRid)
       .then(raw => {
         setRawItem(raw);
