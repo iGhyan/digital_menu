@@ -30,13 +30,20 @@ const STATUS_STEPS = [
   { key: 'DELIVERED', label: 'Delivered',        icon: Bike,        desc: 'Enjoy your meal! 🎉'                         },
 ];
 
+const STATUS_RANK: Record<string, number> = {
+  'RECEIVED': 0, 'PENDING': 0,
+  'PREPARING': 1, 'IN_PROGRESS': 1, 'KITCHEN_ACCEPTED': 1,
+  'READY': 2, 'READY_TO_SERVE': 2, 'FOOD_READY': 2,
+  'DELIVERED': 3, 'COMPLETED': 3,
+};
+
 function getStepIndex(status: string): number {
   const s = (status ?? '').toUpperCase();
   if (s === 'RECEIVED' || s === 'PENDING') return 0;
   if (s === 'PREPARING' || s === 'IN_PROGRESS' || s === 'KITCHEN_ACCEPTED') return 1;
   if (s === 'READY' || s === 'READY_TO_SERVE' || s === 'FOOD_READY') return 2;
   if (s === 'DELIVERED' || s === 'COMPLETED') return 3;
-  return 0; // TIMED_OUT, CANCELLED → show as step 0 (will be caught by isCancelled)
+  return 0;
 }
 
 function formatTime(iso?: string) {
@@ -60,27 +67,32 @@ export default function TrackingPage() {
   const [lastSync, setLastSync] = useState('');
   const [pollPct,  setPollPct]  = useState(0);
 
-  // ── Fetch orders ──────────────────────────────────────────────────────────────
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
       const res = await fetch('/api/orders', { cache: 'no-store' });
       if (!res.ok) throw new Error(`Orders API ${res.status}`);
       const data = await res.json();
-      // Sort newest first
       const all = (data.orders ?? []);
-      // Sort newest first
       all.sort((a: ApiOrder, b: ApiOrder) =>
         new Date(b.placedAt ?? 0).getTime() - new Date(a.placedAt ?? 0).getTime()
       );
-      // Separate active vs timed-out: show active first, timed-out at the end
-      const active = all.filter((o: ApiOrder) => 
-        !['TIMED_OUT', 'CANCELLED'].includes((o.status ?? '').toUpperCase())
-      );
-      const timedOut = all.filter((o: ApiOrder) => 
-        ['TIMED_OUT', 'CANCELLED'].includes((o.status ?? '').toUpperCase())
-      );
-      setOrders([...active, ...timedOut]);
+      // Merge — never downgrade status (API lags behind after PATCH)
+      setOrders(prev => {
+        const prevMap = new Map(prev.map(o => [o.orderId, o]));
+        const merged = all.map((o: ApiOrder) => {
+          const existing = prevMap.get(o.orderId);
+          if (!existing) return o;
+          const existingRank = STATUS_RANK[(existing.status ?? '').toUpperCase()] ?? -1;
+          const freshRank    = STATUS_RANK[(o.status ?? '').toUpperCase()] ?? -1;
+          const isFreshFinal = ['TIMED_OUT','CANCELLED'].includes((o.status??'').toUpperCase());
+          const status = (!isFreshFinal && existingRank > freshRank) ? existing.status : o.status;
+          return { ...o, status };
+        });
+        const active   = merged.filter((o: ApiOrder) => !['TIMED_OUT','CANCELLED'].includes((o.status??'').toUpperCase()));
+        const inactive = merged.filter((o: ApiOrder) =>  ['TIMED_OUT','CANCELLED'].includes((o.status??'').toUpperCase()));
+        return [...active, ...inactive];
+      });
       setLastSync(new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true }));
       setError('');
     } catch (e: any) {
@@ -96,7 +108,6 @@ export default function TrackingPage() {
     return () => clearInterval(id);
   }, [load]);
 
-  // Poll bar
   useEffect(() => {
     const start = Date.now();
     const id = setInterval(() => {
@@ -105,7 +116,6 @@ export default function TrackingPage() {
     return () => clearInterval(id);
   }, [lastSync]);
 
-  // Match to current table session — SSR-safe via state
   const [sessionTid,   setSessionTid]   = useState('');
   const [sessionTable, setSessionTable] = useState('');
   useEffect(() => {
@@ -120,7 +130,6 @@ export default function TrackingPage() {
            sessionTable && t.endsWith(sessionTable.padStart(2, '0'));
   });
 
-  // Prefer active orders (not timed out) for display
   const activeOrders = (myOrders.length > 0 ? myOrders : orders).filter(
     o => !['TIMED_OUT', 'CANCELLED'].includes((o.status ?? '').toUpperCase())
   );
@@ -141,7 +150,6 @@ export default function TrackingPage() {
           <span>●●●</span>
         </div>
 
-        {/* Nav */}
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.05]">
           <button onClick={() => router.back()}
             className="w-9 h-9 rounded-xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
@@ -159,14 +167,12 @@ export default function TrackingPage() {
           </button>
         </div>
 
-        {/* Poll bar */}
         <div className="h-[2px] bg-white/[0.04]">
           <div className="h-full bg-gold-400/50 transition-all duration-200" style={{ width: `${pollPct}%` }} />
         </div>
 
         <div className="flex-1 overflow-y-auto scrollbar-hide px-5 py-4">
 
-          {/* Loading */}
           {loading && (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
               <RefreshCw size={28} className="animate-spin text-gold-400/50" />
@@ -174,7 +180,6 @@ export default function TrackingPage() {
             </div>
           )}
 
-          {/* Error */}
           {error && !loading && (
             <div className="p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-center mb-4">
               <p className="text-[13px] text-red-300">{error}</p>
@@ -182,7 +187,6 @@ export default function TrackingPage() {
             </div>
           )}
 
-          {/* No orders */}
           {!loading && !error && orders.length === 0 && (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <span className="text-4xl opacity-20">📋</span>
@@ -195,10 +199,8 @@ export default function TrackingPage() {
             </div>
           )}
 
-          {/* Latest order */}
           {latest && !loading && (
             <>
-              {/* Order card */}
               <div className={`rounded-2xl p-4 mb-5 border ${
                 isCancelled
                   ? 'bg-red-500/[0.07] border-red-500/20'
@@ -228,18 +230,15 @@ export default function TrackingPage() {
                 </div>
               </div>
 
-              {/* Status timeline */}
               {!isCancelled && (
                 <>
                   <p className="section-label mb-4">Live Status</p>
                   <div className="relative mb-6">
-                    {/* Track line */}
                     <div className="absolute left-[19px] top-5 bottom-5 w-[2px] bg-white/[0.06]" />
                     <div
                       className="absolute left-[19px] top-5 w-[2px] bg-gold-400/60 transition-all duration-1000"
                       style={{ height: `calc(${(currentStep / (STATUS_STEPS.length - 1)) * 100}% )` }}
                     />
-
                     <div className="flex flex-col gap-7">
                       {STATUS_STEPS.map((step, i) => {
                         const done    = i < currentStep;
@@ -284,7 +283,6 @@ export default function TrackingPage() {
                 </>
               )}
 
-              {/* Cancelled state */}
               {isCancelled && (
                 <div className="flex flex-col items-center py-8 gap-3 text-center mb-5">
                   <span className="text-4xl">❌</span>
@@ -293,7 +291,6 @@ export default function TrackingPage() {
                 </div>
               )}
 
-              {/* Items ordered */}
               <p className="section-label mb-3">Items Ordered</p>
               <div className="flex flex-col gap-2 mb-5">
                 {(latest.lineItems ?? []).map((li, i) => (
@@ -312,7 +309,6 @@ export default function TrackingPage() {
                     </span>
                   </div>
                 ))}
-                {/* Total */}
                 <div className="flex justify-between items-center px-3.5 py-2.5 mt-1">
                   <span className="text-[13px] font-semibold text-white/50">Total</span>
                   <span className="font-serif text-[16px] text-gold-400 font-semibold">
@@ -323,7 +319,6 @@ export default function TrackingPage() {
             </>
           )}
 
-          {/* Previous orders */}
           {displayOrders.length > 1 && !loading && (
             <>
               <p className="section-label mb-3">Previous Orders</p>
@@ -360,7 +355,6 @@ export default function TrackingPage() {
           )}
         </div>
 
-        {/* Bottom nav */}
         <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.05] bg-surface">
           {[
             { icon: '🏠', label: 'Home',   href: '/guest'           },

@@ -15,6 +15,9 @@ const STATUS_NEXT: Record<KdsStatus, KdsStatus | null> = {
 const STATUS_ORDER: Record<KdsStatus, number> = {
   new: 0, preparing: 1, ready: 2, delivered: 3,
 };
+const STATUS_RANK: Record<string, number> = {
+  new: 0, preparing: 1, ready: 2, delivered: 3,
+};
 const STRIP: Record<KdsStatus, string> = {
   new:       'bg-amber-400',
   preparing: 'bg-blue-500',
@@ -51,7 +54,6 @@ export default function KitchenDisplayPage() {
   const wsRef      = useRef<WebSocket | null>(null);
   const wsRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // ── Live clock ────────────────────────────────────────────────────────────────
   useEffect(() => {
     const tick = () => {
       const n = new Date();
@@ -60,7 +62,6 @@ export default function KitchenDisplayPage() {
     tick(); const id = setInterval(tick, 1000); return () => clearInterval(id);
   }, []);
 
-  // ── Elapsed ticker ────────────────────────────────────────────────────────────
   useEffect(() => {
     const id = setInterval(() => {
       setOrders(prev => prev.map(o =>
@@ -72,7 +73,6 @@ export default function KitchenDisplayPage() {
     return () => clearInterval(id);
   }, []);
 
-  // ── Poll bar ──────────────────────────────────────────────────────────────────
   useEffect(() => {
     const id = setInterval(() => {
       const pct = ((Date.now() - pollStart.current) % POLL_INTERVAL) / POLL_INTERVAL * 100;
@@ -90,42 +90,31 @@ export default function KitchenDisplayPage() {
     setWsLog(prev => [`[${time}] ${msg}`, ...prev.slice(0, 9)]);
   };
 
-  // ── WebSocket connection ───────────────────────────────────────────────────────
   const connectWs = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
-
     setWsState('connecting');
     addWsLog('Connecting to WebSocket…');
-
     const ws = new WebSocket(WS_URL);
     wsRef.current = ws;
-
     ws.onopen = () => {
       setWsState('connected');
       addWsLog('✓ Connected to WebSocket');
-      // Send initial handshake
       ws.send(JSON.stringify({ action: 'subscribe', channel: 'orders' }));
     };
-
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
         addWsLog(`← ${JSON.stringify(msg).slice(0, 80)}`);
-
-        // Handle order status update from WebSocket
         const orderId = msg.orderId ?? msg.order_id;
         const status  = msg.status  ?? msg.orderStatus;
         const flags   = msg.flags;
-
         if (orderId && (status || flags)) {
           const kdsStatus = toKdsStatus(status ?? '', flags);
           const shortId   = orderId.slice(0, 6).toUpperCase();
           const displayId = `LM-${shortId}`;
-
           setOrders(prev => {
             const exists = prev.find(o => (o as any)._apiId === orderId || o.id === displayId);
             if (exists) {
-              // Update existing order
               showToast(`📡 WS: Order #${displayId} → ${kdsStatus.toUpperCase()}`);
               return prev.map(o =>
                 ((o as any)._apiId === orderId || o.id === displayId)
@@ -133,7 +122,6 @@ export default function KitchenDisplayPage() {
                   : o,
               );
             } else if (msg.lineItems || msg.items) {
-              // New order pushed via WebSocket
               const newOrder = normaliseOrder(msg);
               showToast(`🔔 WS: New order #${newOrder.id} — Table ${newOrder.table}`);
               if (audio) playNewOrderBeep();
@@ -146,16 +134,10 @@ export default function KitchenDisplayPage() {
         addWsLog(`← (non-JSON) ${event.data?.slice(0, 60)}`);
       }
     };
-
-    ws.onerror = () => {
-      setWsState('error');
-      addWsLog('✗ WebSocket error');
-    };
-
+    ws.onerror = () => { setWsState('error'); addWsLog('✗ WebSocket error'); };
     ws.onclose = (e) => {
       setWsState('disconnected');
       addWsLog(`✗ Disconnected (code ${e.code})`);
-      // Auto-reconnect after 5s
       if (wsRetryRef.current) clearTimeout(wsRetryRef.current);
       wsRetryRef.current = setTimeout(connectWs, 5000);
     };
@@ -169,7 +151,6 @@ export default function KitchenDisplayPage() {
     };
   }, [connectWs]);
 
-  // ── Send message via WebSocket ─────────────────────────────────────────────────
   const wsSend = (payload: object) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       const msg = JSON.stringify(payload);
@@ -178,7 +159,6 @@ export default function KitchenDisplayPage() {
     }
   };
 
-  // ── Fetch orders from REST API ────────────────────────────────────────────────
   const loadOrders = useCallback(async (silent = false) => {
     if (!silent) setApiState('loading');
     try {
@@ -197,9 +177,12 @@ export default function KitchenDisplayPage() {
         const prevMap = new Map(prev.map(o => [o.id, o]));
         return fresh.map((o: any) => {
           const existing = prevMap.get(o.id);
-          return existing
-            ? { ...o, elapsedSeconds: existing.elapsedSeconds, items: existing.items }
-            : o;
+          if (!existing) return o;
+          // Never let REST poll roll back a status the kitchen already advanced
+          const existingRank = STATUS_RANK[existing.status] ?? 0;
+          const freshRank    = STATUS_RANK[o.status] ?? 0;
+          const status = existingRank > freshRank ? existing.status : o.status;
+          return { ...o, status, elapsedSeconds: existing.elapsedSeconds, items: existing.items };
         });
       });
       setApiState('live');
@@ -216,26 +199,19 @@ export default function KitchenDisplayPage() {
     return () => clearInterval(id);
   }, [loadOrders]);
 
-  // ── Advance order status ───────────────────────────────────────────────────────
   const advanceOrder = async (orderId: string) => {
     const order = orders.find(o => o.id === orderId);
     if (!order) return;
     const next = STATUS_NEXT[order.status];
     if (!next) return;
-
     setAdvancing(orderId);
-    // Optimistic update
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: next } : o));
-
     try {
       const apiId = (order as any)._apiId ?? orderId;
       await patchOrderStatus(apiId, next);
-
-      // Also notify via WebSocket
       wsSend({ action: 'orderStatusUpdate', orderId: apiId, status: next });
       showToast(`Order #${orderId} → ${next.toUpperCase()}`);
     } catch (err: any) {
-      // Rollback
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: order.status } : o));
       showToast(`⚠ Failed: ${err?.message}`);
     } finally {
@@ -243,7 +219,6 @@ export default function KitchenDisplayPage() {
     }
   };
 
-  // ── Toggle dish done ──────────────────────────────────────────────────────────
   const toggleDish = (orderId: string, idx: number) => {
     setOrders(prev => prev.map(o => {
       if (o.id !== orderId) return o;
@@ -252,7 +227,6 @@ export default function KitchenDisplayPage() {
     }));
   };
 
-  // ── Demo order (local) ────────────────────────────────────────────────────────
   const injectDemo = () => {
     const id = `LM-DEMO${Math.floor(Math.random()*900+100)}`;
     const demo: KdsOrder = {
@@ -267,7 +241,6 @@ export default function KitchenDisplayPage() {
     setOrders(prev => [demo, ...prev]);
     showToast(`🔔 Demo order #${id} — Table ${demo.table}`);
     if (audio) playNewOrderBeep();
-    // Also send via WebSocket
     wsSend({ action: 'newOrder', orderId: id, status: 'new' });
   };
 
@@ -294,7 +267,6 @@ export default function KitchenDisplayPage() {
   return (
     <div className="min-h-dvh bg-black flex flex-col font-sans">
 
-      {/* Toast */}
       {toast && (
         <div className="fixed top-20 right-5 z-50 bg-black border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-3 shadow-card-lg max-w-[320px] animate-fade-up">
           <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-base flex-shrink-0">🔔</div>
@@ -302,7 +274,6 @@ export default function KitchenDisplayPage() {
         </div>
       )}
 
-      {/* Top bar */}
       <header className="flex items-center justify-between px-6 py-3.5 bg-[#14b8a60f] border-b border-[#14b8a6] shadow-card">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center text-white text-base shadow-brand">🍽️</div>
@@ -320,7 +291,6 @@ export default function KitchenDisplayPage() {
             </p>
           </div>
 
-          {/* API status */}
           <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 border ${
             apiState === 'live'   ? 'bg-green-50 border-green-200' :
             apiState === 'error'  ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
@@ -333,7 +303,6 @@ export default function KitchenDisplayPage() {
             }
           </div>
 
-          {/* WebSocket status */}
           <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 border ${wsColor}`}>
             <Radio size={11} className={wsTextColor} />
             <span className={`text-[10px] font-semibold uppercase tracking-widest ${wsTextColor}`}>
@@ -349,8 +318,7 @@ export default function KitchenDisplayPage() {
             { val: counts.preparing, label: 'Preparing', cls: 'text-blue-600'  },
             { val: counts.ready,     label: 'Ready',     cls: 'text-brand-600' },
           ].map(s => (
-            <div key={s.label} className="flex flex-col items-center px-3.5 py-1.5 rounded-xl bg-[#14b8a60f] border border-[#14b8a6]
-             shadow-card">
+            <div key={s.label} className="flex flex-col items-center px-3.5 py-1.5 rounded-xl bg-[#14b8a60f] border border-[#14b8a6] shadow-card">
               <span className={`text-[18px] font-bold font-serif ${s.cls}`}>{s.val}</span>
               <span className="text-[9px] text-ink-400 uppercase tracking-widest font-semibold">{s.label}</span>
             </div>
@@ -364,7 +332,6 @@ export default function KitchenDisplayPage() {
         </div>
       </header>
 
-      {/* Error banner */}
       {apiState === 'error' && (
         <div className="flex items-center gap-3 px-6 py-2.5 bg-red-50 border-b border-red-200">
           <WifiOff size={14} className="text-red-500 flex-shrink-0" />
@@ -376,7 +343,6 @@ export default function KitchenDisplayPage() {
         </div>
       )}
 
-      {/* Filter bar */}
       <div className="flex items-center gap-2 px-6 py-3 bg-[#14b8a60f] border-b border-[#14b8a6]">
         {([
           { key: 'all',       label: 'All Orders',  cls: 'bg-ink-900 border-ink-900 text-white'       },
@@ -398,10 +364,8 @@ export default function KitchenDisplayPage() {
           }`}>
           ✓ Delivered
         </button>
-
       </div>
 
-      {/* WebSocket log bar */}
       {wsLog.length > 0 && (
         <div className="px-6 py-2 bg-black border-b border-[#14b8a6] flex items-center gap-3 overflow-hidden">
           <Radio size={12} className="text-green-400 flex-shrink-0" />
@@ -410,7 +374,6 @@ export default function KitchenDisplayPage() {
         </div>
       )}
 
-      {/* Loading */}
       {apiState === 'loading' && orders.length === 0 && (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
           <RefreshCw size={32} className="text-brand-400 animate-spin" />
@@ -419,7 +382,6 @@ export default function KitchenDisplayPage() {
         </div>
       )}
 
-      {/* Grid */}
       {(apiState !== 'loading' || orders.length > 0) && (
         <div className="flex-1 grid grid-cols-3 gap-4 p-5 content-start overflow-y-auto">
           {filtered.length === 0 && (

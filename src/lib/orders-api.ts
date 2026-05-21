@@ -72,7 +72,7 @@ export function toFlagPayload(orderId: string, status: KdsStatus) {
 export function toKdsStatus(apiStatus: string, flags?: ApiOrder['flags']): KdsStatus {
   // If flags present, derive from them (more accurate)
   if (flags) {
-    if (flags.cancelled)       return 'delivered'; // show as done
+    if (flags.cancelled)       return 'new'; // cancelled → treat as new/reset
     if (flags.delivered)       return 'delivered';
     if (flags.foodReady)       return 'ready';
     if (flags.kitchenAccepted) return 'preparing';
@@ -146,14 +146,12 @@ export async function fetchOrders(): Promise<(KdsOrder & { _apiId: string })[]> 
     throw new Error(`Orders API ${res.status}: ${text}`);
   }
   const data: ApiOrdersResponse = await res.json();
-  console.log('[Orders API] raw:', data);
   return (data.orders ?? []).map(normaliseOrder);
 }
 
 // ── PATCH order status using flags ────────────────────────────────────────────
 export async function patchOrderStatus(apiOrderId: string, newStatus: KdsStatus): Promise<void> {
   const payload = toFlagPayload(apiOrderId, newStatus);
-  console.log('[Orders API] PATCH payload:', payload);
 
   const res = await fetch(PROXY.patch(apiOrderId), {
     method:  'PATCH',
