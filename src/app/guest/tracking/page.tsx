@@ -355,7 +355,7 @@ export default function TrackingPage() {
           )}
         </div>
 
-        <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.05] bg-surface">
+        <div className="flex justify-around items-center px-5 pt-3.5 pb-7 border-t border-white/[0.05] bg-[#14b8a60f]">
           {[
             { icon: '🏠', label: 'Home',   href: '/guest'           },
             { icon: '📖', label: 'Menu',   href: '/guest/menu'      },
