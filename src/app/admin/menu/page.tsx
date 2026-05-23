@@ -17,7 +17,7 @@ type LoadState  = 'idle' | 'loading' | 'success' | 'error';
 type GlbStatus  = 'idle' | 'uploading' | 'approved' | 'error';
 
 const ADMIN_RESTAURANT_ID = process.env.NEXT_PUBLIC_ADMIN_RESTAURANT_ID ?? '2687382e-3b00-4f57-9014-f484df89e3fe';
-const MENU_BASE_URL = process.env.NEXT_PUBLIC_MENU_API_URL ?? 'https://g1ou0w5x4m.execute-api.ap-south-1.amazonaws.com/dev/menus';
+const MENU_BASE_URL = '/api/menu'; // proxied through Next.js — avoids CORS
 
 async function createMenuItemWithFiles(
   payload: {
@@ -34,14 +34,24 @@ async function createMenuItemWithFiles(
   fd.append('priceMinorUnits', String(Math.round(payload.price * 100)));
   fd.append('categoryId',      payload.categoryId);
   fd.append('isActive',        String(payload.isActive));
+  fd.append('restaurantId',    ADMIN_RESTAURANT_ID);
+  // tenantId injected by proxy via X-Tenant-Id header — no need in body
   if (payload.allergens?.length) fd.append('allergens', payload.allergens.join(','));
   if (payload.prepTime)  fd.append('prepTime', payload.prepTime);
   if (payload.calories)  fd.append('calories',  String(payload.calories));
   if (imageFile)         fd.append('file',      imageFile);
   if (glbFile)           fd.append('arFile',    glbFile);
+
+  // Get auth token — proxy adds X-Tenant-Id server-side
+  const { getValidIdToken } = await import('@/lib/cognito');
+  const token = await getValidIdToken();
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = token;
+
   const res = await fetch(
     `${MENU_BASE_URL}/restaurants/${ADMIN_RESTAURANT_ID}/items`,
-    { method: 'POST', headers: { 'X-Tenant-Id': TENANT_ID }, body: fd }
+    { method: 'POST', headers, body: fd }
+    // Note: NO Content-Type header — browser sets multipart boundary automatically
   );
   if (!res.ok) {
     const txt = await res.text().catch(() => res.statusText);
@@ -87,11 +97,18 @@ export default function AdminMenuPage() {
         const name = r.categoryName ?? KNOWN[id] ?? (r.category && !r.category.includes('-') ? r.category : `Cat-${id.slice(0,6)}`);
         if (id && id.includes('-')) seen.set(id, name);
       });
-      if (seen.size > 0) {
-        const catList = Array.from(seen.entries()).map(([id, name]) => ({ id, name }));
-        setCats(catList);
-        setForm(prev => prev.category === '' ? { ...prev, category: catList[0]?.id ?? '' } : prev);
-      }
+      const DEFAULT_CATS = [
+        { id: 'e933848e-0d18-4e3a-b0a8-d70275c2fa54', name: 'Main Course' },
+        { id: 'bev-cat-0000-0000-000000000001', name: 'Beverages' },
+        { id: 'des-cat-0000-0000-000000000002', name: 'Desserts' },
+        { id: 'str-cat-0000-0000-000000000003', name: 'Starters' },
+      ];
+      const catList = seen.size > 0
+        ? Array.from(seen.entries()).map(([id, name]) => ({ id, name }))
+        : DEFAULT_CATS;
+      setCats(catList);
+      setForm(prev => prev.category === '' ? { ...prev, category: catList[0]?.id ?? '' } : prev);
+
       setLoadState('success');
     } catch (err: any) {
       setLoadError(err?.message ?? 'Failed to load'); setLoadState('error');
@@ -132,6 +149,7 @@ export default function AdminMenuPage() {
 
   const saveItem = async () => {
     if (!form.name.trim() || !form.price) { setSaveErr('Name and price are required.'); return; }
+    if (cats.length === 0) { setSaveErr('Categories are still loading. Please wait a moment and try again.'); return; }
     if (!form.category) { setSaveErr('Please select a category.'); return; }
     setSaving(true); setSaveMsg(''); setSaveErr('');
     try {
@@ -445,7 +463,7 @@ export default function AdminMenuPage() {
                 <label className="block text-[11px] text-white/30 uppercase tracking-widest font-semibold mb-1.5">Category</label>
                 <select value={form.category} onChange={e => setForm(p => ({ ...p, category: e.target.value }))}
                   className={`w-full h-10 px-3 rounded-xl bg-gray-800 border text-white text-[13px] focus:outline-none focus:border-orange-500/50 transition ${!form.category ? 'border-amber-500/50' : 'border-white/10'}`}>
-                  {cats.length === 0 && <option value="">⚠ Loading…</option>}
+                  {cats.length === 0 && <option value="">⚠ Loading categories…</option>}
                   {cats.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
@@ -582,10 +600,12 @@ export default function AdminMenuPage() {
                 className="flex-1 h-10 rounded-xl bg-white/5 border border-white/10 text-[13px] font-semibold text-white/40 hover:bg-white/10 hover:text-white/60 transition-all">
                 Cancel
               </button>
-              <button onClick={saveItem} disabled={saving || glbStatus === 'uploading'}
+              <button onClick={saveItem} disabled={saving || glbStatus === 'uploading' || (cats.length === 0 && !modal.item)}
                 className="flex-[2] h-10 rounded-xl flex items-center justify-center gap-1.5 text-[13px] font-semibold bg-orange-500 text-white hover:bg-orange-600 shadow-lg shadow-orange-500/25 disabled:opacity-50 transition-all">
                 {saving || glbStatus === 'uploading'
                   ? <><Loader2 size={14} className="animate-spin" /> {saveMsg || 'Saving…'}</>
+                  : cats.length === 0 && !modal.item
+                  ? '⏳ Loading categories…'
                   : modal.item ? '✓ Update Item' : '✓ Create Item'}
               </button>
             </div>
