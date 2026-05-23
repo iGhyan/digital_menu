@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Volume2, VolumeX, BellRing, RefreshCw, Wifi, WifiOff, Radio } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Volume2, VolumeX, RefreshCw, Wifi, WifiOff, Radio, LogOut } from 'lucide-react';
 import { formatTimer, timerColorClass, timerBarColor, playNewOrderBeep } from '@/lib/utils';
 import { fetchOrders, patchOrderStatus, normaliseOrder, toKdsStatus, WS_URL } from '@/lib/orders-api';
 import type { KdsOrder, KdsStatus } from '@/lib/types';
+import { useAuth } from '@/hooks/useAuth';
 
-type Filter   = 'all' | 'new' | 'preparing' | 'ready' | 'delivered';
-type WsState  = 'connecting' | 'connected' | 'disconnected' | 'error';
+type Filter  = 'all' | 'new' | 'preparing' | 'ready' | 'delivered';
+type WsState = 'connecting' | 'connected' | 'disconnected' | 'error';
 
 const STATUS_NEXT: Record<KdsStatus, KdsStatus | null> = {
   new: 'preparing', preparing: 'ready', ready: 'delivered', delivered: null,
@@ -19,24 +21,28 @@ const STATUS_RANK: Record<string, number> = {
   new: 0, preparing: 1, ready: 2, delivered: 3,
 };
 const STRIP: Record<KdsStatus, string> = {
-  new:       'bg-amber-400',
+  new:       'bg-orange-400',
   preparing: 'bg-blue-500',
-  ready:     'bg-brand-500',
-  delivered: 'bg-purple-400',
+  ready:     'bg-green-500',
+  delivered: 'bg-purple-500',
 };
 const BTN_CFG: Record<KdsStatus, { label: string; cls: string }[]> = {
-  new:       [
-    { label: '✓ Accept',     cls: 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100'   },
-    { label: '🔥 Preparing', cls: 'bg-amber-50 border-amber-200 text-amber-700 hover:bg-amber-100' },
+  new: [
+    { label: '✓ Accept',     cls: 'bg-blue-500/15 border-blue-500/30 text-blue-400 hover:bg-blue-500/25'   },
+    { label: '🔥 Preparing', cls: 'bg-orange-500/15 border-orange-500/30 text-orange-400 hover:bg-orange-500/25' },
   ],
-  preparing: [{ label: '🔔 Mark Ready', cls: 'bg-green-50 border-green-200 text-green-700 hover:bg-green-100' }],
-  ready:     [{ label: '✓ Delivered',   cls: 'bg-brand-50 border-brand-200 text-brand-700 hover:bg-brand-100'  }],
-  delivered: [{ label: '✓ Completed',   cls: 'bg-ink-50 border-ink-200 text-ink-300 cursor-default'            }],
+  preparing: [{ label: '🔔 Mark Ready', cls: 'bg-green-500/15 border-green-500/30 text-green-400 hover:bg-green-500/25'  }],
+  ready:     [{ label: '✓ Delivered',   cls: 'bg-purple-500/15 border-purple-500/30 text-purple-400 hover:bg-purple-500/25' }],
+  delivered: [{ label: '✓ Completed',   cls: 'bg-white/5 border-white/10 text-white/25 cursor-default'                      }],
 };
 
 const POLL_INTERVAL = 15000;
 
 export default function KitchenDisplayPage() {
+  const router = useRouter();
+  const { user, logout } = useAuth();
+  const [loggingOut, setLoggingOut] = useState(false);
+
   const [orders,    setOrders]    = useState<KdsOrder[]>([]);
   const [filter,    setFilter]    = useState<Filter>('all');
   const [audio,     setAudio]     = useState(true);
@@ -53,6 +59,12 @@ export default function KitchenDisplayPage() {
   const prevIds    = useRef<Set<string>>(new Set());
   const wsRef      = useRef<WebSocket | null>(null);
   const wsRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function handleLogout() {
+    setLoggingOut(true);
+    await logout();
+    router.push('/login/kds');
+  }
 
   useEffect(() => {
     const tick = () => {
@@ -86,7 +98,7 @@ export default function KitchenDisplayPage() {
   };
 
   const addWsLog = (msg: string) => {
-    const time = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+    const time = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     setWsLog(prev => [`[${time}] ${msg}`, ...prev.slice(0, 9)]);
   };
 
@@ -117,9 +129,7 @@ export default function KitchenDisplayPage() {
             if (exists) {
               showToast(`📡 WS: Order #${displayId} → ${kdsStatus.toUpperCase()}`);
               return prev.map(o =>
-                ((o as any)._apiId === orderId || o.id === displayId)
-                  ? { ...o, status: kdsStatus }
-                  : o,
+                ((o as any)._apiId === orderId || o.id === displayId) ? { ...o, status: kdsStatus } : o,
               );
             } else if (msg.lineItems || msg.items) {
               const newOrder = normaliseOrder(msg);
@@ -162,7 +172,7 @@ export default function KitchenDisplayPage() {
   const loadOrders = useCallback(async (silent = false) => {
     if (!silent) setApiState('loading');
     try {
-      const fresh = await fetchOrders();
+      const fresh    = await fetchOrders();
       const freshIds = new Set(fresh.map((o: any) => o.id));
       const newOnes  = fresh.filter((o: any) => !prevIds.current.has(o.id));
       if (newOnes.length > 0 && prevIds.current.size > 0) {
@@ -172,13 +182,11 @@ export default function KitchenDisplayPage() {
         });
       }
       prevIds.current = freshIds;
-
       setOrders(prev => {
         const prevMap = new Map(prev.map(o => [o.id, o]));
         return fresh.map((o: any) => {
-          const existing = prevMap.get(o.id);
-          if (!existing) return o;
-          // Never let REST poll roll back a status the kitchen already advanced
+          const existing     = prevMap.get(o.id);
+          if (!existing)     return o;
           const existingRank = STATUS_RANK[existing.status] ?? 0;
           const freshRank    = STATUS_RANK[o.status] ?? 0;
           const status = existingRank > freshRank ? existing.status : o.status;
@@ -227,23 +235,6 @@ export default function KitchenDisplayPage() {
     }));
   };
 
-  const injectDemo = () => {
-    const id = `LM-DEMO${Math.floor(Math.random()*900+100)}`;
-    const demo: KdsOrder = {
-      id, table: String(Math.floor(Math.random()*12+1)).padStart(2,'0'),
-      zone: 'Main Hall', status: 'new', elapsedSeconds: 0, maxSeconds: 1500,
-      items: [
-        { emoji:'🍝', name:'Pasta Carbonara', mods:'Extra cheese', qty:1, done:false },
-        { emoji:'🥤', name:'Lemon Soda',      mods:'No ice',       qty:2, done:false },
-      ],
-      note: '', placedAt: new Date().toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit',hour12:true}),
-    };
-    setOrders(prev => [demo, ...prev]);
-    showToast(`🔔 Demo order #${id} — Table ${demo.table}`);
-    if (audio) playNewOrderBeep();
-    wsSend({ action: 'newOrder', orderId: id, status: 'new' });
-  };
-
   const filtered = orders
     .filter(o => {
       if (filter === 'all')       return o.status !== 'delivered';
@@ -258,137 +249,170 @@ export default function KitchenDisplayPage() {
     ready:     orders.filter(o => o.status === 'ready').length,
   };
 
-  const wsColor = wsState === 'connected' ? 'bg-green-50 border-green-200' :
-                  wsState === 'connecting' ? 'bg-amber-50 border-amber-200' :
-                  'bg-red-50 border-red-200';
-  const wsTextColor = wsState === 'connected' ? 'text-green-700' :
-                      wsState === 'connecting' ? 'text-amber-700' : 'text-red-600';
-
   return (
-    <div className="min-h-dvh bg-black flex flex-col font-sans">
+    <div className="min-h-dvh bg-gray-950 flex flex-col font-sans">
 
+      {/* ── Toast ── */}
       {toast && (
-        <div className="fixed top-20 right-5 z-50 bg-black border border-amber-200 rounded-2xl px-4 py-3 flex items-center gap-3 shadow-card-lg max-w-[320px] animate-fade-up">
-          <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center text-base flex-shrink-0">🔔</div>
-          <p className="text-[13px] font-semibold text-ink-800">{toast}</p>
+        <div className="fixed top-20 right-5 z-50 bg-gray-900 border border-orange-500/30 rounded-2xl px-4 py-3 flex items-center gap-3 shadow-2xl max-w-[320px]">
+          <div className="w-8 h-8 rounded-xl bg-orange-500/15 flex items-center justify-center text-base flex-shrink-0">🔔</div>
+          <p className="text-[13px] font-semibold text-white/80">{toast}</p>
         </div>
       )}
 
-      <header className="flex items-center justify-between px-6 py-3.5 bg-[#14b8a60f] border-b border-[#14b8a6] shadow-card">
+      {/* ── Header ── */}
+      <header className="flex items-center justify-between px-6 py-3.5 bg-gray-900 border-b border-white/[0.06]">
+
+        {/* Left — brand */}
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-brand-500 flex items-center justify-center text-white text-base shadow-brand">🍽️</div>
+          <div className="w-9 h-9 rounded-xl bg-orange-500/15 border border-orange-500/25 flex items-center justify-center text-base">🍽️</div>
           <div>
-            <p className="font-serif text-[17px] text-ink-900 font-semibold">Das Perdas · KDS</p>
-            <p className="text-[10px] text-ink-400 uppercase tracking-widest font-semibold">Kitchen Display System</p>
+            <p className="text-[17px] font-bold text-white tracking-tight">Das Perdas · KDS</p>
+            <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold">Kitchen Display System</p>
           </div>
         </div>
 
+        {/* Center — clock + status badges */}
         <div className="flex items-center gap-3">
           <div className="text-center">
-            <p className="font-mono-dm text-[20px] text-ink-900 font-semibold">{clock || '00:00:00'}</p>
-            <p className="text-[10px] text-ink-400">
-              {new Date().toLocaleDateString('en-US',{weekday:'short',day:'numeric',month:'short'})}
+            <p className="font-mono text-[20px] text-white font-bold">{clock || '00:00:00'}</p>
+            <p className="text-[10px] text-white/25">
+              {new Date().toLocaleDateString('en-US', { weekday: 'short', day: 'numeric', month: 'short' })}
             </p>
           </div>
 
+          {/* REST status */}
           <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 border ${
-            apiState === 'live'   ? 'bg-green-50 border-green-200' :
-            apiState === 'error'  ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
+            apiState === 'live'  ? 'bg-green-500/10 border-green-500/25' :
+            apiState === 'error' ? 'bg-red-500/10 border-red-500/25'     :
+                                   'bg-amber-500/10 border-amber-500/25'
           }`}>
             {apiState === 'live'
-              ? <><Wifi size={11} className="text-green-600" /><span className="text-[10px] text-green-700 font-semibold uppercase tracking-widest">REST Live</span></>
+              ? <><Wifi size={11} className="text-green-400" /><span className="text-[10px] text-green-400 font-semibold uppercase tracking-widest">REST Live</span></>
               : apiState === 'error'
-              ? <><WifiOff size={11} className="text-red-500" /><span className="text-[10px] text-red-600 font-semibold">API Error</span></>
-              : <><RefreshCw size={11} className="text-amber-600 animate-spin" /><span className="text-[10px] text-amber-700 font-semibold">Loading…</span></>
+              ? <><WifiOff size={11} className="text-red-400" /><span className="text-[10px] text-red-400 font-semibold">API Error</span></>
+              : <><RefreshCw size={11} className="text-amber-400 animate-spin" /><span className="text-[10px] text-amber-400 font-semibold">Loading…</span></>
             }
           </div>
 
-          <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 border ${wsColor}`}>
-            <Radio size={11} className={wsTextColor} />
-            <span className={`text-[10px] font-semibold uppercase tracking-widest ${wsTextColor}`}>
+          {/* WS status */}
+          <div className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 border ${
+            wsState === 'connected'  ? 'bg-green-500/10 border-green-500/25'  :
+            wsState === 'connecting' ? 'bg-amber-500/10 border-amber-500/25'  :
+                                       'bg-red-500/10 border-red-500/25'
+          }`}>
+            <Radio size={11} className={
+              wsState === 'connected'  ? 'text-green-400'  :
+              wsState === 'connecting' ? 'text-amber-400'  : 'text-red-400'
+            } />
+            <span className={`text-[10px] font-semibold uppercase tracking-widest ${
+              wsState === 'connected'  ? 'text-green-400'  :
+              wsState === 'connecting' ? 'text-amber-400'  : 'text-red-400'
+            }`}>
               WS {wsState === 'connected' ? 'Live' : wsState === 'connecting' ? '…' : 'Off'}
             </span>
-            {wsState === 'connected' && <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-blink" />}
+            {wsState === 'connected' && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
           </div>
         </div>
 
+        {/* Right — counters + audio + logout */}
         <div className="flex items-center gap-2.5">
           {[
-            { val: counts.pending,   label: 'Pending',   cls: 'text-amber-600' },
-            { val: counts.preparing, label: 'Preparing', cls: 'text-blue-600'  },
-            { val: counts.ready,     label: 'Ready',     cls: 'text-brand-600' },
+            { val: counts.pending,   label: 'Pending',   cls: 'text-orange-400' },
+            { val: counts.preparing, label: 'Preparing', cls: 'text-blue-400'   },
+            { val: counts.ready,     label: 'Ready',     cls: 'text-green-400'  },
           ].map(s => (
-            <div key={s.label} className="flex flex-col items-center px-3.5 py-1.5 rounded-xl bg-[#14b8a60f] border border-[#14b8a6] shadow-card">
-              <span className={`text-[18px] font-bold font-serif ${s.cls}`}>{s.val}</span>
-              <span className="text-[9px] text-ink-400 uppercase tracking-widest font-semibold">{s.label}</span>
+            <div key={s.label} className="flex flex-col items-center px-3.5 py-1.5 rounded-xl bg-white/5 border border-white/10">
+              <span className={`text-[18px] font-bold ${s.cls}`}>{s.val}</span>
+              <span className="text-[9px] text-white/25 uppercase tracking-widest font-semibold">{s.label}</span>
             </div>
           ))}
+
           <button onClick={() => setAudio(!audio)}
             className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl border text-[12px] font-semibold transition-all ${
-              audio ? 'bg-black border-brand-200 text-brand-700' : 'bg-red-50 border-red-200 text-red-600'
+              audio ? 'bg-white/5 border-white/10 text-white/60 hover:bg-white/10' : 'bg-red-500/10 border-red-500/25 text-red-400'
             }`}>
             {audio ? <Volume2 size={14} /> : <VolumeX size={14} />} Audio {audio ? 'On' : 'Off'}
+          </button>
+
+          <button
+            onClick={handleLogout} disabled={loggingOut}
+            title={`Sign out ${user?.displayName || ''}`}
+            className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl border border-red-500/25 bg-red-500/10 text-red-400 text-[12px] font-semibold hover:bg-red-500/20 transition-all disabled:opacity-50">
+            <LogOut size={14} className={loggingOut ? 'animate-spin' : ''} />
+            {loggingOut ? 'Signing out…' : 'Sign Out'}
           </button>
         </div>
       </header>
 
+      {/* ── Poll progress ── */}
+      <div className="h-[2px] bg-white/[0.04]">
+        <div className="h-full bg-orange-500/40 transition-all duration-200" style={{ width: `${pollPct}%` }} />
+      </div>
+
+      {/* ── API error banner ── */}
       {apiState === 'error' && (
-        <div className="flex items-center gap-3 px-6 py-2.5 bg-red-50 border-b border-red-200">
-          <WifiOff size={14} className="text-red-500 flex-shrink-0" />
-          <p className="text-[12px] text-red-600 flex-1">{apiError}</p>
+        <div className="flex items-center gap-3 px-6 py-2.5 bg-red-500/10 border-b border-red-500/20">
+          <WifiOff size={14} className="text-red-400 flex-shrink-0" />
+          <p className="text-[12px] text-red-300 flex-1">{apiError}</p>
           <button onClick={() => loadOrders()}
-            className="px-3 py-1 rounded-lg bg-red-100 border border-red-200 text-red-700 text-[12px] font-semibold hover:bg-red-200 transition-colors">
+            className="px-3 py-1 rounded-lg bg-red-500/15 border border-red-500/25 text-red-400 text-[12px] font-semibold hover:bg-red-500/25 transition-all">
             Retry
           </button>
         </div>
       )}
 
-      <div className="flex items-center gap-2 px-6 py-3 bg-[#14b8a60f] border-b border-[#14b8a6]">
+      {/* ── Filter bar ── */}
+      <div className="flex items-center gap-2 px-6 py-3 bg-gray-900/50 border-b border-white/[0.06]">
         {([
-          { key: 'all',       label: 'All Orders',  cls: 'bg-ink-900 border-ink-900 text-white'       },
-          { key: 'new',       label: '🟠 New',        cls: 'bg-orange-500 border-orange-500 text-white' },
-          { key: 'preparing', label: '🔵 Preparing',  cls: 'bg-blue-600 border-blue-600 text-white'     },
-          { key: 'ready',     label: '🟢 Ready',      cls: 'bg-brand-500 border-brand-500 text-white'   },
+          { key: 'all',       label: 'All Orders',  cls: 'bg-white/10 border-white/20 text-white'           },
+          { key: 'new',       label: '🟠 New',        cls: 'bg-orange-500 border-orange-500 text-white'       },
+          { key: 'preparing', label: '🔵 Preparing',  cls: 'bg-blue-600 border-blue-600 text-white'           },
+          { key: 'ready',     label: '🟢 Ready',      cls: 'bg-green-600 border-green-600 text-white'         },
         ] as const).map(f => (
           <button key={f.key} onClick={() => setFilter(f.key)}
             className={`px-3.5 py-1.5 rounded-full border text-[12px] font-semibold transition-all ${
-              filter === f.key ? f.cls : 'bg-black border-ink-200 text-ink-500 hover:border-ink-300'
+              filter === f.key ? f.cls : 'bg-white/[0.03] border-white/10 text-white/40 hover:border-white/20 hover:text-white/60'
             }`}>
             {f.label}
           </button>
         ))}
-        <div className="w-px h-5 bg-black mx-1" />
+        <div className="w-px h-5 bg-white/10 mx-1" />
         <button onClick={() => setFilter('delivered')}
           className={`text-[11px] px-3.5 py-1.5 rounded-full border font-semibold transition-all ${
-            filter === 'delivered' ? 'bg-purple-500 border-purple-500 text-white' : 'bg-black border-ink-200 text-ink-400'
+            filter === 'delivered' ? 'bg-purple-500 border-purple-500 text-white' : 'bg-white/[0.03] border-white/10 text-white/35 hover:text-white/55'
           }`}>
           ✓ Delivered
         </button>
       </div>
 
+      {/* ── WS log bar ── */}
       {wsLog.length > 0 && (
-        <div className="px-6 py-2 bg-black border-b border-[#14b8a6] flex items-center gap-3 overflow-hidden">
+        <div className="px-6 py-2 bg-gray-950 border-b border-white/[0.04] flex items-center gap-3 overflow-hidden">
           <Radio size={12} className="text-green-400 flex-shrink-0" />
-          <p className="text-[10px] text-green-300 font-mono-dm truncate">{wsLog[0]}</p>
-          <span className="text-[9px] text-ink-500 flex-shrink-0">{wsLog.length} events</span>
+          <p className="text-[10px] text-green-400/70 font-mono truncate">{wsLog[0]}</p>
+          <span className="text-[9px] text-white/20 flex-shrink-0">{wsLog.length} events</span>
         </div>
       )}
 
+      {/* ── Loading state ── */}
       {apiState === 'loading' && orders.length === 0 && (
         <div className="flex-1 flex flex-col items-center justify-center gap-4">
-          <RefreshCw size={32} className="text-brand-400 animate-spin" />
-          <p className="text-[14px] text-ink-400 font-medium">Loading orders from API…</p>
-          <p className="text-[11px] text-ink-300 font-mono-dm">GET /orders?tenantId=t123&restaurantId=r456</p>
+          <RefreshCw size={32} className="text-orange-400/50 animate-spin" />
+          <p className="text-[14px] text-white/30 font-medium">Loading orders from API…</p>
+          <p className="text-[11px] text-white/20 font-mono">GET /orders?tenantId=t123&restaurantId=r456</p>
         </div>
       )}
 
+      {/* ── Order cards grid ── */}
       {(apiState !== 'loading' || orders.length > 0) && (
         <div className="flex-1 grid grid-cols-3 gap-4 p-5 content-start overflow-y-auto">
+
           {filtered.length === 0 && (
-            <div className="col-span-3 flex flex-col items-center justify-center py-16 gap-3 border-2 border-dashed border-ink-200 rounded-3xl bg-black">
-              <span className="text-4xl opacity-30">✓</span>
-              <p className="text-[13px] text-ink-300 font-medium">No orders in this category</p>
-              <p className="text-[11px] text-ink-300">
+            <div className="col-span-3 flex flex-col items-center justify-center py-16 gap-3 border-2 border-dashed border-white/[0.06] rounded-3xl">
+              <span className="text-4xl opacity-20">✓</span>
+              <p className="text-[13px] text-white/25 font-medium">No orders in this category</p>
+              <p className="text-[11px] text-white/20">
                 {orders.length === 0 ? 'Waiting for orders…' : `${orders.length} orders in other categories`}
               </p>
             </div>
@@ -402,67 +426,77 @@ export default function KitchenDisplayPage() {
 
             return (
               <div key={order.id}
-                className={`bg-black rounded-3xl flex flex-col border transition-all hover:-translate-y-0.5 hover:shadow-card-lg ${
-                  isUrgent ? 'border-red-300 shadow-[0_0_0_2px_rgba(239,68,68,0.12)]' : 'border-ink-100 shadow-card'
+                className={`bg-gray-900 rounded-3xl flex flex-col border transition-all hover:-translate-y-0.5 hover:shadow-xl ${
+                  isUrgent
+                    ? 'border-red-500/40 shadow-[0_0_0_2px_rgba(239,68,68,0.08)]'
+                    : 'border-white/[0.07] shadow-lg'
                 }`}>
 
+                {/* Status strip */}
                 <div className={`h-1.5 rounded-t-3xl ${STRIP[order.status]}`} />
 
-                <div className="flex items-start justify-between px-4 py-3.5 border-b border-[#14b8a6]">
+                {/* Card header */}
+                <div className="flex items-start justify-between px-4 py-3.5 border-b border-white/[0.06]">
                   <div>
                     <div className="flex items-center gap-2">
-                      <p className="font-mono-dm text-[13px] font-semibold text-ink-800">#{order.id}</p>
+                      <p className="font-mono text-[13px] font-bold text-white/70">#{order.id}</p>
                       {allDone && order.status !== 'delivered' && (
-                        <span className="text-[9px] bg-green-50 border border-green-200 text-green-700 px-1.5 py-0.5 rounded-full font-semibold">ALL DONE</span>
+                        <span className="text-[9px] bg-green-500/15 border border-green-500/25 text-green-400 px-1.5 py-0.5 rounded-full font-bold">ALL DONE</span>
                       )}
                     </div>
-                    <p className="text-[11px] text-ink-400 mt-0.5">🪑 Table {order.table} · {order.zone}</p>
+                    <p className="text-[11px] text-white/30 mt-0.5">🪑 Table {order.table} · {order.zone}</p>
                   </div>
                   <div className="text-right">
-                    <p className={`font-mono-dm text-[20px] font-bold ${timerColorClass(order.elapsedSeconds, order.maxSeconds)}`}>
+                    <p className={`font-mono text-[20px] font-bold ${timerColorClass(order.elapsedSeconds, order.maxSeconds)}`}>
                       {formatTimer(order.elapsedSeconds)}
                     </p>
-                    <p className="text-[10px] text-ink-400">Placed {order.placedAt}</p>
+                    <p className="text-[10px] text-white/25">Placed {order.placedAt}</p>
                   </div>
                 </div>
 
-                <div className="h-1.5 bg-ink-100">
+                {/* Timer bar */}
+                <div className="h-1.5 bg-white/[0.05]">
                   <div className="h-full rounded-full transition-all duration-1000"
-                    style={{ width:`${pct}%`, background: timerBarColor(order.elapsedSeconds, order.maxSeconds) }} />
+                    style={{ width: `${pct}%`, background: timerBarColor(order.elapsedSeconds, order.maxSeconds) }} />
                 </div>
 
+                {/* Items */}
                 <div className="flex flex-col gap-2 px-4 py-3 flex-1">
                   {order.items.map((dish, i) => (
                     <div key={i} className="flex items-center gap-2.5">
                       <span className="text-[18px] w-8 text-center">{dish.emoji}</span>
                       <div className="flex-1 min-w-0">
-                        <p className={`text-[12px] font-semibold truncate ${dish.done ? 'line-through text-ink-300' : 'text-ink-800'}`}>{dish.name}</p>
-                        {dish.mods && <p className="text-[10px] text-ink-400">{dish.mods}</p>}
+                        <p className={`text-[12px] font-semibold truncate ${dish.done ? 'line-through text-white/20' : 'text-white/70'}`}>
+                          {dish.name}
+                        </p>
+                        {dish.mods && <p className="text-[10px] text-white/25">{dish.mods}</p>}
                       </div>
-                      <span className="text-[12px] text-ink-500 font-semibold">×{dish.qty}</span>
+                      <span className="text-[12px] text-white/35 font-semibold">×{dish.qty}</span>
                       <button onClick={() => toggleDish(order.id, i)}
                         className={`w-5 h-5 rounded-[5px] border flex items-center justify-center transition-all ${
-                          dish.done ? 'bg-brand-500 border-brand-500' : 'border-ink-200 hover:bg-ink-50'
+                          dish.done ? 'bg-orange-500 border-orange-500' : 'border-white/15 hover:bg-white/5'
                         }`}>
-                        {dish.done && <span className="text-white text-[11px]">✓</span>}
+                        {dish.done && <span className="text-white text-[11px] font-bold">✓</span>}
                       </button>
                     </div>
                   ))}
                 </div>
 
+                {/* Note */}
                 {order.note && (
-                  <div className="mx-4 mb-2 p-2 rounded-xl bg-amber-50 border border-amber-200 flex items-start gap-1.5">
-                    <span className="text-amber-500 text-xs mt-0.5">⚠</span>
-                    <p className="text-[10px] text-amber-700 leading-relaxed font-medium">{order.note}</p>
+                  <div className="mx-4 mb-2 p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-start gap-1.5">
+                    <span className="text-amber-400 text-xs mt-0.5">⚠</span>
+                    <p className="text-[10px] text-amber-300/80 leading-relaxed font-medium">{order.note}</p>
                   </div>
                 )}
 
-                <div className="flex gap-2 px-4 py-3 border-t border-[#14b8a6]">
+                {/* Action buttons */}
+                <div className="flex gap-2 px-4 py-3 border-t border-white/[0.06]">
                   {BTN_CFG[order.status].map((btn, i) => (
                     <button key={btn.label}
                       onClick={() => i === 0 && advanceOrder(order.id)}
                       disabled={order.status === 'delivered' || isAdvancing}
-                      className={`flex-1 h-9 rounded-xl flex items-center justify-center gap-1.5 text-[12px] font-semibold border transition-all ${btn.cls} disabled:opacity-50`}>
+                      className={`flex-1 h-9 rounded-xl flex items-center justify-center gap-1.5 text-[12px] font-semibold border transition-all disabled:opacity-40 ${btn.cls}`}>
                       {isAdvancing && i === 0
                         ? <RefreshCw size={12} className="animate-spin" />
                         : btn.label}

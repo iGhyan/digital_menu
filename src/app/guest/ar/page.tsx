@@ -6,7 +6,7 @@ interface Props {
     iid?:   string;
     name?:  string;
     emoji?: string;
-    url?:   string;  // pre-fetched arModelUrl from menu item API
+    url?:   string;
   }>;
 }
 
@@ -15,11 +15,11 @@ export default async function ARPage({ searchParams }: Props) {
 
   return (
     <ARPageClient
-      restaurantId={params.rid?.trim()  ?? ''}
-      itemId={params.iid?.trim()        ?? ''}
-      itemName={params.name             ?? 'Menu Item'}
-      emoji={params.emoji               ?? '🍽️'}
-      preloadedGlbUrl={params.url?.trim() ?? ''}
+      restaurantId={params.rid?.trim()     ?? ''}
+      itemId={params.iid?.trim()           ?? ''}
+      itemName={params.name                ?? 'Menu Item'}
+      emoji={params.emoji                  ?? '🍽️'}
+      preloadedGlbUrl={params.url?.trim()  ?? ''}
     />
   );
 }
