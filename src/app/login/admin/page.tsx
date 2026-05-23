@@ -1,15 +1,14 @@
 // src/app/login/admin/page.tsx
-// Login page for Admin and Tenant users
-
 'use client'
 
+import { Suspense } from 'react'
 import { useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 
 type Step = 'login' | 'new_password' | 'forgot' | 'reset_confirm' | 'register' | 'verify'
 
-export default function AdminLoginPage() {
+function AdminLoginContent() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const reason       = searchParams.get('reason')
@@ -25,7 +24,6 @@ export default function AdminLoginPage() {
   const [session,     setSession]     = useState('')
   const [message,     setMessage]     = useState('')
 
-  // ── Login submit ─────────────────────────────────────────────────────────
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     const result = await login(email, password)
@@ -37,68 +35,42 @@ export default function AdminLoginPage() {
     }
   }
 
-  // ── New password submit ──────────────────────────────────────────────────
   async function handleNewPass(e: React.FormEvent) {
     e.preventDefault()
-    if (newPassword !== confirmPass) {
-      setMessage('Passwords do not match')
-      return
-    }
+    if (newPassword !== confirmPass) { setMessage('Passwords do not match'); return }
     const result = await handleNewPassword(email, newPassword, session)
-    if (result.success && result.redirect) {
-      router.push(result.redirect)
-    }
+    if (result.success && result.redirect) router.push(result.redirect)
   }
 
-  // ── Forgot password ──────────────────────────────────────────────────────
   async function handleForgot(e: React.FormEvent) {
     e.preventDefault()
     const result = await sendResetCode(email)
-    if (result.success) {
-      setMessage('Check your email for a reset code')
-      setStep('reset_confirm')
-    }
+    if (result.success) { setMessage('Check your email for a reset code'); setStep('reset_confirm') }
   }
 
-  // ── Confirm reset ────────────────────────────────────────────────────────
   async function handleReset(e: React.FormEvent) {
     e.preventDefault()
-    if (newPassword !== confirmPass) {
-      setMessage('Passwords do not match')
-      return
-    }
+    if (newPassword !== confirmPass) { setMessage('Passwords do not match'); return }
     const result = await resetPassword(email, code, newPassword)
-    if (result.success) {
-      setMessage('Password reset! You can now login.')
-      setStep('login')
-    }
+    if (result.success) { setMessage('Password reset! You can now login.'); setStep('login') }
   }
 
-  // ── Register ─────────────────────────────────────────────────────────────
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault()
     const result = await register(email, password, restaurant)
-    if (result.success) {
-      setMessage('Check your email for a verification code')
-      setStep('verify')
-    }
+    if (result.success) { setMessage('Check your email for a verification code'); setStep('verify') }
   }
 
-  // ── Verify email ──────────────────────────────────────────────────────────
   async function handleVerify(e: React.FormEvent) {
     e.preventDefault()
     const result = await verifyEmail(email, code)
-    if (result.success) {
-      setMessage('Email verified! You can now login.')
-      setStep('login')
-    }
+    if (result.success) { setMessage('Email verified! You can now login.'); setStep('login') }
   }
 
   return (
     <div className="min-h-screen bg-gray-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
 
-        {/* Logo */}
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-white tracking-tight">
             Menu<span className="text-orange-500">Lay</span>
@@ -106,7 +78,6 @@ export default function AdminLoginPage() {
           <p className="text-gray-400 mt-1 text-sm">Restaurant Management Platform</p>
         </div>
 
-        {/* Alert banners */}
         {reason === 'expired' && (
           <div className="mb-4 p-3 bg-yellow-900/40 border border-yellow-700 rounded-lg text-yellow-300 text-sm">
             Your session expired. Please login again.
@@ -128,51 +99,36 @@ export default function AdminLoginPage() {
           </div>
         )}
 
-        {/* Card */}
         <div className="bg-gray-900 border border-gray-800 rounded-2xl p-8">
 
-          {/* ── LOGIN ── */}
           {step === 'login' && (
             <>
               <h2 className="text-xl font-semibold text-white mb-6">Sign in</h2>
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Email</label>
-                  <input
-                    type="email" required value={email}
-                    onChange={e => setEmail(e.target.value)}
+                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition"
-                    placeholder="you@restaurant.com"
-                  />
+                    placeholder="you@restaurant.com" />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Password</label>
-                  <input
-                    type="password" required value={password}
-                    onChange={e => setPassword(e.target.value)}
+                  <input type="password" required value={password} onChange={e => setPassword(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-orange-500 transition"
-                    placeholder="••••••••"
-                  />
+                    placeholder="••••••••" />
                 </div>
-                <button
-                  type="submit" disabled={loading}
-                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition"
-                >
+                <button type="submit" disabled={loading}
+                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition">
                   {loading ? 'Signing in...' : 'Sign in'}
                 </button>
               </form>
               <div className="mt-4 flex justify-between text-sm">
-                <button onClick={() => setStep('forgot')} className="text-gray-400 hover:text-orange-400 transition">
-                  Forgot password?
-                </button>
-                <button onClick={() => setStep('register')} className="text-gray-400 hover:text-orange-400 transition">
-                  Register restaurant
-                </button>
+                <button onClick={() => setStep('forgot')} className="text-gray-400 hover:text-orange-400 transition">Forgot password?</button>
+                <button onClick={() => setStep('register')} className="text-gray-400 hover:text-orange-400 transition">Register restaurant</button>
               </div>
             </>
           )}
 
-          {/* ── NEW PASSWORD ── */}
           {step === 'new_password' && (
             <>
               <h2 className="text-xl font-semibold text-white mb-2">Set New Password</h2>
@@ -180,33 +136,24 @@ export default function AdminLoginPage() {
               <form onSubmit={handleNewPass} className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">New Password</label>
-                  <input
-                    type="password" required value={newPassword}
-                    onChange={e => setNewPassword(e.target.value)}
+                  <input type="password" required value={newPassword} onChange={e => setNewPassword(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                    placeholder="Min 8 chars, uppercase, number"
-                  />
+                    placeholder="Min 8 chars, uppercase, number" />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Confirm Password</label>
-                  <input
-                    type="password" required value={confirmPass}
-                    onChange={e => setConfirmPass(e.target.value)}
+                  <input type="password" required value={confirmPass} onChange={e => setConfirmPass(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                    placeholder="••••••••"
-                  />
+                    placeholder="••••••••" />
                 </div>
-                <button
-                  type="submit" disabled={loading}
-                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition"
-                >
+                <button type="submit" disabled={loading}
+                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition">
                   {loading ? 'Setting password...' : 'Set Password & Sign in'}
                 </button>
               </form>
             </>
           )}
 
-          {/* ── FORGOT PASSWORD ── */}
           {step === 'forgot' && (
             <>
               <h2 className="text-xl font-semibold text-white mb-2">Reset Password</h2>
@@ -214,27 +161,19 @@ export default function AdminLoginPage() {
               <form onSubmit={handleForgot} className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Email</label>
-                  <input
-                    type="email" required value={email}
-                    onChange={e => setEmail(e.target.value)}
+                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                    placeholder="you@restaurant.com"
-                  />
+                    placeholder="you@restaurant.com" />
                 </div>
-                <button
-                  type="submit" disabled={loading}
-                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition"
-                >
+                <button type="submit" disabled={loading}
+                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition">
                   {loading ? 'Sending...' : 'Send Reset Code'}
                 </button>
               </form>
-              <button onClick={() => setStep('login')} className="mt-4 text-sm text-gray-400 hover:text-orange-400 transition">
-                ← Back to login
-              </button>
+              <button onClick={() => setStep('login')} className="mt-4 text-sm text-gray-400 hover:text-orange-400 transition">← Back to login</button>
             </>
           )}
 
-          {/* ── RESET CONFIRM ── */}
           {step === 'reset_confirm' && (
             <>
               <h2 className="text-xl font-semibold text-white mb-2">Enter Reset Code</h2>
@@ -242,42 +181,30 @@ export default function AdminLoginPage() {
               <form onSubmit={handleReset} className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Reset Code</label>
-                  <input
-                    type="text" required value={code}
-                    onChange={e => setCode(e.target.value)}
+                  <input type="text" required value={code} onChange={e => setCode(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                    placeholder="123456"
-                  />
+                    placeholder="123456" />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">New Password</label>
-                  <input
-                    type="password" required value={newPassword}
-                    onChange={e => setNewPassword(e.target.value)}
+                  <input type="password" required value={newPassword} onChange={e => setNewPassword(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                    placeholder="Min 8 chars, uppercase, number"
-                  />
+                    placeholder="Min 8 chars, uppercase, number" />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Confirm Password</label>
-                  <input
-                    type="password" required value={confirmPass}
-                    onChange={e => setConfirmPass(e.target.value)}
+                  <input type="password" required value={confirmPass} onChange={e => setConfirmPass(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                    placeholder="••••••••"
-                  />
+                    placeholder="••••••••" />
                 </div>
-                <button
-                  type="submit" disabled={loading}
-                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition"
-                >
+                <button type="submit" disabled={loading}
+                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition">
                   {loading ? 'Resetting...' : 'Reset Password'}
                 </button>
               </form>
             </>
           )}
 
-          {/* ── REGISTER ── */}
           {step === 'register' && (
             <>
               <h2 className="text-xl font-semibold text-white mb-2">Register Restaurant</h2>
@@ -285,45 +212,31 @@ export default function AdminLoginPage() {
               <form onSubmit={handleRegister} className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Restaurant Name</label>
-                  <input
-                    type="text" required value={restaurant}
-                    onChange={e => setRestaurant(e.target.value)}
+                  <input type="text" required value={restaurant} onChange={e => setRestaurant(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                    placeholder="Burger House"
-                  />
+                    placeholder="Burger House" />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Email</label>
-                  <input
-                    type="email" required value={email}
-                    onChange={e => setEmail(e.target.value)}
+                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                    placeholder="you@restaurant.com"
-                  />
+                    placeholder="you@restaurant.com" />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Password</label>
-                  <input
-                    type="password" required value={password}
-                    onChange={e => setPassword(e.target.value)}
+                  <input type="password" required value={password} onChange={e => setPassword(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                    placeholder="Min 8 chars, uppercase, number"
-                  />
+                    placeholder="Min 8 chars, uppercase, number" />
                 </div>
-                <button
-                  type="submit" disabled={loading}
-                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition"
-                >
+                <button type="submit" disabled={loading}
+                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition">
                   {loading ? 'Creating account...' : 'Create Account'}
                 </button>
               </form>
-              <button onClick={() => setStep('login')} className="mt-4 text-sm text-gray-400 hover:text-orange-400 transition">
-                ← Already have an account?
-              </button>
+              <button onClick={() => setStep('login')} className="mt-4 text-sm text-gray-400 hover:text-orange-400 transition">← Already have an account?</button>
             </>
           )}
 
-          {/* ── VERIFY EMAIL ── */}
           {step === 'verify' && (
             <>
               <h2 className="text-xl font-semibold text-white mb-2">Verify Email</h2>
@@ -331,17 +244,12 @@ export default function AdminLoginPage() {
               <form onSubmit={handleVerify} className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Verification Code</label>
-                  <input
-                    type="text" required value={code}
-                    onChange={e => setCode(e.target.value)}
+                  <input type="text" required value={code} onChange={e => setCode(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                    placeholder="123456"
-                  />
+                    placeholder="123456" />
                 </div>
-                <button
-                  type="submit" disabled={loading}
-                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition"
-                >
+                <button type="submit" disabled={loading}
+                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition">
                   {loading ? 'Verifying...' : 'Verify Email'}
                 </button>
               </form>
@@ -355,5 +263,22 @@ export default function AdminLoginPage() {
         </p>
       </div>
     </div>
+  )
+}
+
+export default function AdminLoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-white tracking-tight mb-2">
+            Menu<span className="text-orange-500">Lay</span>
+          </h1>
+          <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto mt-4" />
+        </div>
+      </div>
+    }>
+      <AdminLoginContent />
+    </Suspense>
   )
 }

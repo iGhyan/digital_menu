@@ -1,13 +1,11 @@
 // src/app/login/kds/page.tsx
-// Login page for Kitchen Staff
-
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 
-export default function KdsLoginPage() {
+function KdsLoginContent() {
   const router       = useRouter()
   const searchParams = useSearchParams()
   const reason       = searchParams.get('reason')
@@ -34,10 +32,7 @@ export default function KdsLoginPage() {
 
   async function handleNewPass(e: React.FormEvent) {
     e.preventDefault()
-    if (newPassword !== confirmPass) {
-      setLocalError('Passwords do not match')
-      return
-    }
+    if (newPassword !== confirmPass) { setLocalError('Passwords do not match'); return }
     const result = await handleNewPassword(email, newPassword, session)
     if (result.success) router.push('/kds')
   }
@@ -70,26 +65,18 @@ export default function KdsLoginPage() {
               <form onSubmit={handleLogin} className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Email</label>
-                  <input
-                    type="email" required value={email}
-                    onChange={e => setEmail(e.target.value)}
+                  <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                    placeholder="kitchen@restaurant.com"
-                  />
+                    placeholder="kitchen@restaurant.com" />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Password</label>
-                  <input
-                    type="password" required value={password}
-                    onChange={e => setPassword(e.target.value)}
+                  <input type="password" required value={password} onChange={e => setPassword(e.target.value)}
                     className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                    placeholder="••••••••"
-                  />
+                    placeholder="••••••••" />
                 </div>
-                <button
-                  type="submit" disabled={loading}
-                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition"
-                >
+                <button type="submit" disabled={loading}
+                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition">
                   {loading ? 'Signing in...' : 'Enter Kitchen'}
                 </button>
               </form>
@@ -101,24 +88,16 @@ export default function KdsLoginPage() {
               <form onSubmit={handleNewPass} className="space-y-4">
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">New Password</label>
-                  <input
-                    type="password" required value={newPassword}
-                    onChange={e => setNewPassword(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                  />
+                  <input type="password" required value={newPassword} onChange={e => setNewPassword(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition" />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-400 mb-1">Confirm Password</label>
-                  <input
-                    type="password" required value={confirmPass}
-                    onChange={e => setConfirmPass(e.target.value)}
-                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition"
-                  />
+                  <input type="password" required value={confirmPass} onChange={e => setConfirmPass(e.target.value)}
+                    className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-orange-500 transition" />
                 </div>
-                <button
-                  type="submit" disabled={loading}
-                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition"
-                >
+                <button type="submit" disabled={loading}
+                  className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white font-semibold rounded-lg py-3 transition">
                   {loading ? 'Setting...' : 'Set Password & Enter'}
                 </button>
               </form>
@@ -127,5 +106,20 @@ export default function KdsLoginPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function KdsLoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-950 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-4xl mb-4">👨‍🍳</div>
+          <div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mx-auto" />
+        </div>
+      </div>
+    }>
+      <KdsLoginContent />
+    </Suspense>
   )
 }
