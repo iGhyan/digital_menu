@@ -9,19 +9,18 @@ type RequestOptions = {
   method?:  'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
   body?:    object
   headers?: Record<string, string>
-  public?:  boolean // skip auth for public routes
+  public?:  boolean
 }
 
 export async function apiCall<T = unknown>(
   path: string,
   options: RequestOptions = {}
-): Promise<T> {
+): Promise<T | null> {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...options.headers,
   }
 
-  // ── Inject auth headers for protected routes ─────────────────────────────
   if (!options.public) {
     const idToken = await getValidIdToken()
     if (!idToken) {
@@ -29,7 +28,6 @@ export async function apiCall<T = unknown>(
     }
     headers['Authorization'] = idToken
 
-    // Inject X-Tenant-Id — your Lambda requires this
     const user = loadUser()
     if (user?.tenantId) {
       headers['X-Tenant-Id'] = user.tenantId
@@ -49,7 +47,7 @@ export async function apiCall<T = unknown>(
 
   // Handle empty responses (204 No Content)
   const text = await res.text()
-  return text ? JSON.parse(text) : null
+  return text ? (JSON.parse(text) as T) : null
 }
 
 // ── Convenience methods ───────────────────────────────────────────────────────
@@ -66,7 +64,6 @@ export const api = {
   delete: <T>(path: string, opts?: RequestOptions) =>
     apiCall<T>(path, { ...opts, method: 'DELETE' }),
 
-  // Public routes — no auth headers
   public: {
     get: <T>(path: string) =>
       apiCall<T>(path, { method: 'GET', public: true }),
