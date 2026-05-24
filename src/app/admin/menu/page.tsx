@@ -586,14 +586,6 @@ export default function AdminMenuPage() {
               <Toggle checked={isChef} onChange={setIsChef} />
             </div>
 
-            {/* Payload preview */}
-            <div className="mt-2 mb-4 p-3 bg-white/[0.03] border border-white/[0.06] rounded-xl">
-              <p className="text-[10px] text-white/20 uppercase tracking-widest font-semibold mb-1.5">{modal.item ? 'PUT' : 'POST'} Payload Preview</p>
-              <p className="text-[10px] text-white/30 break-all font-mono">
-                {`{ name: "${form.name||'…'}", price: ${form.price||0}, categoryId: "${form.category.slice(0,8)}…", status: "${isActive?'active':'inactive'}"${glbFile ? ', arFile: ✓' : ''} }`}
-              </p>
-            </div>
-
             {/* Actions */}
             <div className="flex gap-2">
               <button onClick={() => setModal({ open: false })}
