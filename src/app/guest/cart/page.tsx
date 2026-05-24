@@ -37,11 +37,13 @@ export default function CartPage() {
     }
   };
 
+  // ── Place Order — with Cognito token ──────────────────────────────────────
   const placeOrder = async () => {
     if (items.length === 0) return;
     setPlacing(true); setOrderError('');
     try {
       const tid = sessionStorage.getItem('lm_tid') ?? tableId ?? 'table-01';
+
       const payload = {
         tenantId:              process.env.NEXT_PUBLIC_TENANT_ID_KDS,
         restaurantId:          process.env.NEXT_PUBLIC_RESTAURANT_ID_KDS,
@@ -57,7 +59,13 @@ export default function CartPage() {
         })),
         ...(notes.trim() && { notes: notes.trim() }),
       };
-      const res  = await fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+     
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error ?? data?.message ?? `Error ${res.status}`);
       setOrderId(data.orderId ?? '');
@@ -108,7 +116,6 @@ export default function CartPage() {
     <main className="min-h-dvh bg-gray-950 flex flex-col items-center">
       <div className="phone-shell">
 
-        {/* ── Nav ── */}
         <div className="flex items-center gap-3 px-5 py-3.5 border-b border-white/[0.06]">
           <button onClick={() => router.back()}
             className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10 transition-all">
@@ -122,7 +129,6 @@ export default function CartPage() {
 
         <div className="flex-1 overflow-y-auto px-5">
 
-          {/* ── Cart items ── */}
           <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mt-4 mb-3">Order Items</p>
           <div className="flex flex-col gap-2.5 mb-4">
             {items.length === 0 && (
@@ -166,7 +172,6 @@ export default function CartPage() {
             ))}
           </div>
 
-          {/* ── Table info ── */}
           <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-2">Table & Session</p>
           <div className="flex items-center gap-2.5 p-3 rounded-[14px] bg-orange-500/5 border border-orange-500/15 mb-4">
             <div className="w-9 h-9 rounded-[10px] bg-orange-500/10 border border-orange-500/20 flex items-center justify-center flex-shrink-0">
@@ -182,7 +187,6 @@ export default function CartPage() {
             <span className="text-green-400 text-sm font-bold">✓</span>
           </div>
 
-          {/* ── Special instructions ── */}
           <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-2">Special Instructions</p>
           <textarea
             value={notes} onChange={e => setNotes(e.target.value)}
@@ -191,7 +195,6 @@ export default function CartPage() {
             className="w-full rounded-[14px] px-3 py-2.5 text-[13px] mb-4 resize-none bg-gray-900 border border-white/[0.08] text-white placeholder-white/20 focus:outline-none focus:border-orange-500/40 transition"
           />
 
-          {/* ── Promo code ── */}
           <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-2">Promo Code</p>
           <div className="flex gap-2 mb-1">
             <input
@@ -210,7 +213,6 @@ export default function CartPage() {
             </div>
           )}
 
-          {/* ── Bill summary ── */}
           <p className="text-[10px] text-white/25 uppercase tracking-widest font-semibold mb-2 mt-2">Bill Summary</p>
           <div className="bg-gray-900 border border-white/[0.07] rounded-2xl p-4 mb-4">
             {items.map(item => (
@@ -245,7 +247,6 @@ export default function CartPage() {
             </div>
           </div>
 
-          {/* ── Error ── */}
           {orderError && (
             <div className="flex items-center gap-2.5 p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 mb-4">
               <AlertCircle size={15} className="text-red-400 flex-shrink-0" />
@@ -255,7 +256,6 @@ export default function CartPage() {
           <div className="h-4" />
         </div>
 
-        {/* ── Footer ── */}
         <div className="px-5 pt-3.5 pb-7 border-t border-white/[0.06] bg-gray-950">
           <button
             onClick={placeOrder}

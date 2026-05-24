@@ -1,21 +1,19 @@
 /**
  * Orders API — KDS integration
- * PATCH uses flags: kitchenAccepted / foodReady / delivered / cancelled
- * WebSocket: wss://6zvolh5t5b.execute-api.us-east-1.amazonaws.com/dev
+ * All routes public — no auth required
  */
 
 import type { KdsOrder, KdsStatus } from './types';
 
-// ── Proxy URLs ─────────────────────────────────────────────────────────────────
 const PROXY = {
   list:  () => '/api/orders',
   patch: (id: string) => `/api/orders/${id}`,
   post:  () => '/api/orders',
 };
 
-export const WS_URL = 'wss://6zvolh5t5b.execute-api.us-east-1.amazonaws.com/dev';
+export const WS_URL = process.env.NEXT_PUBLIC_WS_URL
+  ?? 'wss://6zvolh5t5b.execute-api.us-east-1.amazonaws.com/dev';
 
-// ── API types ──────────────────────────────────────────────────────────────────
 interface ApiLineItem {
   itemId:               string;
   name:                 string;
@@ -52,12 +50,6 @@ interface ApiOrdersResponse {
   count:  number;
 }
 
-// ── Flag payload per KDS status ────────────────────────────────────────────────
-// Based on the API response examples:
-// preparing → kitchenAccepted:true, foodReady:false, delivered:false, cancelled:false
-// ready     → kitchenAccepted:true, foodReady:true,  delivered:false, cancelled:false
-// delivered → kitchenAccepted:true, foodReady:true,  delivered:true,  cancelled:false
-// cancelled → kitchenAccepted:false,foodReady:false, delivered:false, cancelled:true
 export function toFlagPayload(orderId: string, status: KdsStatus) {
   const base = { orderId, kitchenAccepted: false, foodReady: false, delivered: false, cancelled: false };
   switch (status) {
@@ -68,11 +60,9 @@ export function toFlagPayload(orderId: string, status: KdsStatus) {
   }
 }
 
-// ── Status mapping (GET response → KDS) ───────────────────────────────────────
 export function toKdsStatus(apiStatus: string, flags?: ApiOrder['flags']): KdsStatus {
-  // If flags present, derive from them (more accurate)
   if (flags) {
-    if (flags.cancelled)       return 'new'; // cancelled → treat as new/reset
+    if (flags.cancelled)       return 'new';
     if (flags.delivered)       return 'delivered';
     if (flags.foodReady)       return 'ready';
     if (flags.kitchenAccepted) return 'preparing';
@@ -86,7 +76,6 @@ export function toKdsStatus(apiStatus: string, flags?: ApiOrder['flags']): KdsSt
   return 'new';
 }
 
-// ── Emoji guesser ──────────────────────────────────────────────────────────────
 function guessEmoji(name: string): string {
   const n = name.toLowerCase();
   if (n.includes('burger'))                              return '🍔';
@@ -107,7 +96,6 @@ function guessEmoji(name: string): string {
   return '🍽️';
 }
 
-// ── Normalise API order → KDS ─────────────────────────────────────────────────
 export function normaliseOrder(raw: ApiOrder): KdsOrder & { _apiId: string } {
   const tableNum = (raw.tableId ?? 'T?').replace(/[^0-9]/g, '').padStart(2, '0') || '??';
   const placedAt = raw.placedAt
@@ -138,7 +126,7 @@ export function normaliseOrder(raw: ApiOrder): KdsOrder & { _apiId: string } {
   } as any;
 }
 
-// ── GET all orders ─────────────────────────────────────────────────────────────
+// ── GET — public ───────────────────────────────────────────────────────────────
 export async function fetchOrders(): Promise<(KdsOrder & { _apiId: string })[]> {
   const res = await fetch(PROXY.list(), { cache: 'no-store' });
   if (!res.ok) {
@@ -149,7 +137,7 @@ export async function fetchOrders(): Promise<(KdsOrder & { _apiId: string })[]> 
   return (data.orders ?? []).map(normaliseOrder);
 }
 
-// ── PATCH order status using flags ────────────────────────────────────────────
+// ── PATCH — public (no auth) ───────────────────────────────────────────────────
 export async function patchOrderStatus(apiOrderId: string, newStatus: KdsStatus): Promise<void> {
   const payload = toFlagPayload(apiOrderId, newStatus);
 
@@ -162,4 +150,18 @@ export async function patchOrderStatus(apiOrderId: string, newStatus: KdsStatus)
     const text = await res.text().catch(() => '');
     throw new Error(`PATCH ${res.status}: ${text}`);
   }
+}
+
+// ── WebSocket connect — token optional ────────────────────────────────────────
+export async function connectWebSocket(): Promise<WebSocket> {
+  try {
+    const { getValidIdToken } = await import('@/lib/cognito');
+    const token = await getValidIdToken();
+    if (token) {
+      return new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`);
+    }
+  } catch {
+    // No token — connect without auth
+  }
+  return new WebSocket(WS_URL);
 }

@@ -7,6 +7,7 @@ import { formatTimer, timerColorClass, timerBarColor, playNewOrderBeep } from '@
 import { fetchOrders, patchOrderStatus, normaliseOrder, toKdsStatus, WS_URL } from '@/lib/orders-api';
 import type { KdsOrder, KdsStatus } from '@/lib/types';
 import { useAuth } from '@/hooks/useAuth';
+import { connectWebSocket } from '@/lib/orders-api'
 
 type Filter  = 'all' | 'new' | 'preparing' | 'ready' | 'delivered';
 type WsState = 'connecting' | 'connected' | 'disconnected' | 'error';
@@ -102,11 +103,11 @@ export default function KitchenDisplayPage() {
     setWsLog(prev => [`[${time}] ${msg}`, ...prev.slice(0, 9)]);
   };
 
-  const connectWs = useCallback(() => {
+  const connectWs = useCallback(async () => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
     setWsState('connecting');
     addWsLog('Connecting to WebSocket…');
-    const ws = new WebSocket(WS_URL);
+    const ws = await connectWebSocket()
     wsRef.current = ws;
     ws.onopen = () => {
       setWsState('connected');
